@@ -1,0 +1,13 @@
+streamlit
+nltk
+sastrawi
+pandas
+numpy
+scikit-learn
+gensim
+python-docx
+pdfplumber
+newspaper3k
+lxml[html_clean]
+SpeechRecognition
+pydub
