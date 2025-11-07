@@ -84,7 +84,9 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 1: BAG OF WORDS (BoW) ---
     st.subheader("2.1. Metode Bag of Words (BoW)")
-        try:
+    #  <-- (Placeholder gambar)
+    # PERBAIKAN: 'try:' sekarang sejajar dengan 'st.subheader'
+    try:
         bow_vectorizer = CountVectorizer()
         bow_matrix = bow_vectorizer.fit_transform(list_dokumen_bersih)
         fitur_bow = bow_vectorizer.get_feature_names_out()
@@ -96,7 +98,8 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 2: TF-IDF ---
     st.subheader("2.2. Metode TF-IDF")
-        try:
+    #  <-- (Placeholder gambar)
+    try:
         tfidf_vectorizer = TfidfVectorizer()
         tfidf_matrix = tfidf_vectorizer.fit_transform(list_dokumen_bersih)
         fitur_tfidf = tfidf_vectorizer.get_feature_names_out()
@@ -108,7 +111,8 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 3: WORD2VEC ---
     st.subheader("2.3. Metode Word2Vec")
-        tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
+    #  <-- (Placeholder gambar)
+    tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
     if not tokenized_docs_w2v:
         st.error("ERROR Word2Vec: Tidak ada token untuk dilatih.")
         return
@@ -295,8 +299,7 @@ if st.button("MULAI PREPROCESSING & ANALISIS", type="primary"):
             # Panggil fungsi analisis
             run_analysis(list_dokumen_bersih)
 
-# --- INI BAGIAN YANG DIPERBAIKI ---
 # Tombol untuk mereset
 if st.sidebar.button("Bersihkan Semua Dokumen"):
     st.session_state.dokumen_mentah_list = []
-    st.rerun() # HANYA gunakan st.rerun(), ini adalah versi standar sekarang
+    st.rerun() # Versi standar (perbaikan dari error 'experimental_rerun')
