@@ -7,7 +7,7 @@ from nltk.tokenize import word_tokenize
 import os
 import tempfile  # Diperlukan untuk menyimpan file sementara
 
-# 0.1 Library Web Framework (BARU)
+# 0.1 Library Web Framework
 import streamlit as st
 
 # 0.2 Library Preprocessing (Sastrawi)
@@ -23,16 +23,15 @@ import docx
 import pdfplumber
 from newspaper import Article
 import speech_recognition as sr
-# Baris 'from moviepy.editor' TELAH DIHAPUS
+# Import 'moviepy' telah dihapus
 
 # --- Konfigurasi Awal (Hanya dijalankan sekali) ---
 @st.cache_resource  # Streamlit akan 'mengingat' objek ini
 def inisialisasi_model():
-    # Download NLTK
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except nltk.downloader.DownloadError:
-        nltk.download('punkt')
+    # Download NLTK 'punkt'
+    # Di server (Streamlit Cloud), kita tidak perlu memeriksa,
+    # kita bisa langsung mengunduhnya setiap kali app start.
+    nltk.download('punkt')
     
     # Inisialisasi Sastrawi
     stemmer_factory = StemmerFactory()
@@ -44,7 +43,14 @@ def inisialisasi_model():
     return stemmer, stopword_remover
 
 # Panggil fungsi inisialisasi
-stemmer, stopword_remover = inisialisasi_model()
+# Kita tambahkan try/except di sini untuk menangkap error
+# jika Sastrawi/NLTK gagal diinisialisasi
+try:
+    stemmer, stopword_remover = inisialisasi_model()
+except Exception as e:
+    st.error(f"Gagal memuat model Sastrawi/NLTK: {e}")
+    st.error("Pastikan 'nltk' dan 'sastrawi' ada di file requirements.txt Anda.")
+    st.stop() # Menghentikan aplikasi jika model penting gagal dimuat
 
 
 # --- (BAGIAN 1) FUNGSI PREPROCESSING (PROYEK 1) ---
@@ -78,6 +84,7 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 1: BAG OF WORDS (BoW) ---
     st.subheader("2.1. Metode Bag of Words (BoW)")
+    
     try:
         bow_vectorizer = CountVectorizer()
         bow_matrix = bow_vectorizer.fit_transform(list_dokumen_bersih)
@@ -90,6 +97,7 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 2: TF-IDF ---
     st.subheader("2.2. Metode TF-IDF")
+    
     try:
         tfidf_vectorizer = TfidfVectorizer()
         tfidf_matrix = tfidf_vectorizer.fit_transform(list_dokumen_bersih)
@@ -102,6 +110,7 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 3: WORD2VEC ---
     st.subheader("2.3. Metode Word2Vec")
+    
     tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
     if not tokenized_docs_w2v:
         st.error("ERROR Word2Vec: Tidak ada token untuk dilatih.")
@@ -292,4 +301,7 @@ if st.button("MULAI PREPROCESSING & ANALISIS", type="primary"):
 # Tombol untuk mereset
 if st.sidebar.button("Bersihkan Semua Dokumen"):
     st.session_state.dokumen_mentah_list = []
-    st.experimental_rerun() # Ganti dengan st.rerun() jika versi Streamlit Anda baru
+    try:
+        st.rerun() # Versi baru Streamlit
+    except:
+        st.experimental_rerun() # Versi lama Streamlit
