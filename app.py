@@ -26,10 +26,10 @@ import speech_recognition as sr
 # Import 'moviepy' telah dihapus
 
 # --- Konfigurasi Awal (Hanya dijalankan sekali) ---
-@st.cache_resource  # Streamlit akan 'mengingat' objek ini
+# === PERBAIKAN FINAL UNTUK LookupError ===
+# Kita HAPUS @st.cache_resource. Cache ini menyebabkan masalah
+# dengan NLTK di Streamlit Cloud.
 def inisialisasi_model():
-    # Perintah download NLTK dipindahkan ke luar fungsi ini
-    
     # Inisialisasi Sastrawi
     stemmer_factory = StemmerFactory()
     stemmer = stemmer_factory.create_stemmer()
@@ -39,9 +39,8 @@ def inisialisasi_model():
     
     return stemmer, stopword_remover
 
-# === PERBAIKAN UNTUK LookupError ===
-# Download NLTK 'punkt' di sini, di luar fungsi cache.
-# Ini adalah perbaikan yang umum untuk Streamlit Cloud.
+# Download NLTK 'punkt' di sini. Ini akan berjalan setiap kali
+# aplikasi di-boot di server.
 nltk.download('punkt')
 # ==================================
 
@@ -50,7 +49,6 @@ try:
     stemmer, stopword_remover = inisialisasi_model()
 except Exception as e:
     st.error(f"Gagal memuat model Sastrawi/NLTK: {e}")
-    st.error("Pastikan 'nltk' dan 'sastrawi' ada di file requirements.txt Anda.")
     st.stop() # Menghentikan aplikasi jika model penting gagal dimuat
 
 
@@ -64,18 +62,11 @@ def preprocess_text(text):
     
     st.info("   ...melakukan tokenizing...")
     
-    # === PERBAIKAN UNTUK LookupError (v2) ===
-    # Tambahkan try/except fallback jika 'punkt' tidak ditemukan
-    try:
-        # Coba tokenisasi dulu
-        tokens = word_tokenize(text)
-    except LookupError:
-        # Jika gagal (karena 'punkt' tidak ada), download 'punkt'
-        st.info("   ...mengunduh resource NLTK 'punkt'...")
-        nltk.download('punkt')
-        # Coba lagi setelah download
-        tokens = word_tokenize(text)
-    # =======================================
+    # === PERBAIKAN FINAL ===
+    # Kita hapus try/except. 'punkt' SEHARUSNYA sudah ada
+    # dari perintah download di awal.
+    tokens = word_tokenize(text)
+    # ========================
     
     st.info("   ...melakukan stopword removal...")
     text_tanpa_stopword = stopword_remover.remove(' '.join(tokens))
@@ -98,7 +89,6 @@ def run_analysis(list_dokumen_bersih):
     # --- METODE 1: BAG OF WORDS (BoW) ---
     st.subheader("2.1. Metode Bag of Words (BoW)")
     
-    # Pastikan indentasi 'try' ini sudah benar (sejajar dengan st.subheader)
     try:
         bow_vectorizer = CountVectorizer()
         bow_matrix = bow_vectorizer.fit_transform(list_dokumen_bersih)
@@ -112,7 +102,6 @@ def run_analysis(list_dokumen_bersih):
     # --- METODE 2: TF-IDF ---
     st.subheader("2.2. Metode TF-IDF")
     
-    # Pastikan indentasi 'try' ini sudah benar (sejajar dengan st.subheader)
     try:
         tfidf_vectorizer = TfidfVectorizer()
         tfidf_matrix = tfidf_vectorizer.fit_transform(list_dokumen_bersih)
@@ -126,7 +115,6 @@ def run_analysis(list_dokumen_bersih):
     # --- METODE 3: WORD2VEC ---
     st.subheader("2.3. Metode Word2Vec")
     
-    # Pastikan indentasi baris-baris ini sudah benar
     tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
     if not tokenized_docs_w2v:
         st.error("ERROR Word2Vec: Tidak ada token untuk dilatih.")
