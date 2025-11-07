@@ -26,10 +26,10 @@ import speech_recognition as sr
 # Import 'moviepy' telah dihapus
 
 # --- Konfigurasi Awal (Hanya dijalankan sekali) ---
-# === PERBAIKAN FINAL UNTUK LookupError ===
-# Kita HAPUS @st.cache_resource. Cache ini menyebabkan masalah
-# dengan NLTK di Streamlit Cloud.
+# Menghapus @st.cache_resource untuk memperbaiki NLTK LookupError
 def inisialisasi_model():
+    """Menginisialisasi model Sastrawi (tanpa cache)"""
+    
     # Inisialisasi Sastrawi
     stemmer_factory = StemmerFactory()
     stemmer = stemmer_factory.create_stemmer()
@@ -39,16 +39,21 @@ def inisialisasi_model():
     
     return stemmer, stopword_remover
 
+# === PERBAIKAN FINAL UNTUK LookupError ===
 # Download NLTK 'punkt' di sini. Ini akan berjalan setiap kali
-# aplikasi di-boot di server.
-nltk.download('punkt')
+# aplikasi di-boot di server Streamlit Cloud.
+try:
+    nltk.download('punkt')
+except Exception as e:
+    st.error(f"Gagal mengunduh NLTK 'punkt': {e}")
+    st.stop()
 # ==================================
 
 # Panggil fungsi inisialisasi
 try:
     stemmer, stopword_remover = inisialisasi_model()
 except Exception as e:
-    st.error(f"Gagal memuat model Sastrawi/NLTK: {e}")
+    st.error(f"Gagal memuat model Sastrawi: {e}")
     st.stop() # Menghentikan aplikasi jika model penting gagal dimuat
 
 
@@ -61,12 +66,12 @@ def preprocess_text(text):
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     
     st.info("   ...melakukan tokenizing...")
-    
-    # === PERBAIKAN FINAL ===
-    # Kita hapus try/except. 'punkt' SEHARUSNYA sudah ada
-    # dari perintah download di awal.
-    tokens = word_tokenize(text)
-    # ========================
+    # 'punkt' seharusnya sudah ada dari perintah download di awal.
+    try:
+        tokens = word_tokenize(text)
+    except Exception as e:
+        st.error(f"Gagal melakukan tokenisasi: {e}. Pastikan 'punkt' terunduh.")
+        return "" # Mengembalikan string kosong jika gagal
     
     st.info("   ...melakukan stopword removal...")
     text_tanpa_stopword = stopword_remover.remove(' '.join(tokens))
@@ -88,7 +93,6 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 1: BAG OF WORDS (BoW) ---
     st.subheader("2.1. Metode Bag of Words (BoW)")
-    
     try:
         bow_vectorizer = CountVectorizer()
         bow_matrix = bow_vectorizer.fit_transform(list_dokumen_bersih)
@@ -101,7 +105,6 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 2: TF-IDF ---
     st.subheader("2.2. Metode TF-IDF")
-    
     try:
         tfidf_vectorizer = TfidfVectorizer()
         tfidf_matrix = tfidf_vectorizer.fit_transform(list_dokumen_bersih)
@@ -114,7 +117,6 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 3: WORD2VEC ---
     st.subheader("2.3. Metode Word2Vec")
-    
     tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
     if not tokenized_docs_w2v:
         st.error("ERROR Word2Vec: Tidak ada token untuk dilatih.")
@@ -265,9 +267,11 @@ if uploaded_file is not None:
                 # Jika berhasil, tambahkan ke list
                 if teks_mentah:
                     st.session_state.dokumen_mentah_list.append(teks_mentah)
-                    st.sidebar.success("File berhasil diproses dan teks ditambahkan!")
+                    st.sidebar.success("File berhasil diekstrak dan teks ditambahkan!")
                     st.subheader("Teks Mentah Hasil Ekstraksi:")
                     st.text_area("", teks_mentah, height=150)
+                elif not teks_mentah:
+                    st.sidebar.error("Ekstraksi gagal atau file tidak mengandung teks.")
 
 # --- Kontrol dan Tampilan Halaman Utama ---
 
@@ -299,13 +303,16 @@ if st.button("MULAI PREPROCESSING & ANALISIS", type="primary"):
             
                 st.write(f"Memproses Dokumen {i+1}...")
                 hasil_proses = preprocess_text(doc_mentah)
-                list_dokumen_bersih.append(hasil_proses)
-                st.text_area(f"Dokumen {i+1} (Bersih)", hasil_proses, height=100, key=f"clean_doc_{i}")
+                if hasil_proses: # Hanya tambahkan jika preprocessing berhasil
+                    list_dokumen_bersih.append(hasil_proses)
+                    st.text_area(f"Dokumen {i+1} (Bersih)", hasil_proses, height=100, key=f"clean_doc_{i}")
             
-            st.success("--- PROSES PREPROCESSING SELESAI ---")
-            
-            # Panggil fungsi analisis
-            run_analysis(list_dokumen_bersih)
+            if not list_dokumen_bersih:
+                st.error("Preprocessing gagal untuk semua dokumen. Tidak ada yang bisa dianalisis.")
+            else:
+                st.success("--- PROSES PREPROCESSING SELESAI ---")
+                # Panggil fungsi analisis
+                run_analysis(list_dokumen_bersih)
 
 # Tombol untuk mereset
 if st.sidebar.button("Bersihkan Semua Dokumen"):
