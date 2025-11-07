@@ -19,8 +19,9 @@ from gensim.models import Word2Vec
 # 0.4 Library Handler Input
 import docx
 import pdfplumber
-from newspaper import Article
 import speech_recognition as sr
+import requests
+from bs4 import BeautifulSoup
 
 # --- Konfigurasi Awal ---
 @st.cache_resource
@@ -197,15 +198,50 @@ def run_analysis(list_dokumen_bersih):
 # --- (BAGIAN 3) FUNGSI HANDLER INPUT ---
 
 def handle_url(url):
-    """Ekstrak teks dari URL artikel"""
+    """Ekstrak teks dari URL artikel menggunakan BeautifulSoup"""
     st.info(f"🌐 Mengunduh artikel dari: {url}")
     try:
-        article = Article(url)
-        article.download()
-        article.parse()
-        return article.text
-    except Exception as e:
+        # Set headers untuk menghindari blocking
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        # Download halaman
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Parse dengan BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Hapus script dan style
+        for script in soup(["script", "style"]):
+            script.decompose()
+        
+        # Ekstrak teks dari paragraf
+        paragraphs = soup.find_all(['p', 'article', 'div'])
+        text_list = []
+        
+        for para in paragraphs:
+            text = para.get_text(strip=True)
+            if len(text) > 50:  # Filter teks yang terlalu pendek
+                text_list.append(text)
+        
+        full_text = '\n'.join(text_list)
+        
+        if len(full_text) < 100:
+            st.warning("⚠️ Teks yang diekstrak terlalu pendek. Coba URL lain.")
+            return ""
+        
+        return full_text
+        
+    except requests.exceptions.Timeout:
+        st.error("❌ Timeout: Server terlalu lama merespons.")
+        return ""
+    except requests.exceptions.RequestException as e:
         st.error(f"❌ Gagal mengambil artikel: {e}")
+        return ""
+    except Exception as e:
+        st.error(f"❌ Error parsing artikel: {e}")
         return ""
 
 def handle_audio(file_path):
