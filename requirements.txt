@@ -6,6 +6,5 @@ scikit-learn
 gensim
 python-docx
 pdfplumber
+newspaper3k
 SpeechRecognition
-requests
-beautifulsoup4
