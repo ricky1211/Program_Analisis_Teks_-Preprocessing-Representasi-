@@ -41,7 +41,6 @@ def inisialisasi_model():
 
 # === PERBAIKAN UNTUK LookupError ===
 # Download NLTK 'punkt' di sini, di luar fungsi cache.
-# Ini adalah perbaikan yang umum untuk Streamlit Cloud.
 nltk.download('punkt')
 # ==================================
 
@@ -86,7 +85,8 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 1: BAG OF WORDS (BoW) ---
     st.subheader("2.1. Metode Bag of Words (BoW)")
-        try:
+        # Pastikan indentasi 'try' ini sudah benar (sejajar dengan st.subheader)
+    try:
         bow_vectorizer = CountVectorizer()
         bow_matrix = bow_vectorizer.fit_transform(list_dokumen_bersih)
         fitur_bow = bow_vectorizer.get_feature_names_out()
@@ -98,7 +98,8 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 2: TF-IDF ---
     st.subheader("2.2. Metode TF-IDF")
-        try:
+        # Pastikan indentasi 'try' ini sudah benar (sejajar dengan st.subheader)
+    try:
         tfidf_vectorizer = TfidfVectorizer()
         tfidf_matrix = tfidf_vectorizer.fit_transform(list_dokumen_bersih)
         fitur_tfidf = tfidf_vectorizer.get_feature_names_out()
@@ -110,7 +111,8 @@ def run_analysis(list_dokumen_bersih):
 
     # --- METODE 3: WORD2VEC ---
     st.subheader("2.3. Metode Word2Vec")
-        tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
+        # Pastikan indentasi baris-baris ini sudah benar
+    tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
     if not tokenized_docs_w2v:
         st.error("ERROR Word2Vec: Tidak ada token untuk dilatih.")
         return
@@ -286,7 +288,7 @@ if st.button("MULAI PREPROCESSING & ANALISIS", type="primary"):
         with st.spinner("Analisis sedang berjalan... Ini mungkin butuh waktu lama..."):
             st.subheader("--- 1. PROSES PREPROCESSING DIMULAI ---")
             list_dokumen_bersih = []
-            for i, doc_mentah in enumerate(st.session_state.dokumen_mentah_list):
+            for i, doc_mentah in enumerate(list_dokumen_mentah_dari_input):
                 st.write(f"Memproses Dokumen {i+1}...")
                 hasil_proses = preprocess_text(doc_mentah)
                 list_dokumen_bersih.append(hasil_proses)
