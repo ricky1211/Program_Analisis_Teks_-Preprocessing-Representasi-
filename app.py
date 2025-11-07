@@ -1,29 +1,30 @@
-# --- (BAGIAN 0) IMPORT SEMUA LIBRARY ---
+# --- IMPORT LIBRARY ---
 import re
 import pandas as pd
 import numpy as np
 import os
 import tempfile
 
-# 0.1 Library Web Framework
+# Web Framework
 import streamlit as st
 
-# 0.2 Library Preprocessing (Sastrawi)
+# Preprocessing
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 
-# 0.3 Library Representasi Teks
+# Representasi Teks
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from gensim.models import Word2Vec
 
-# 0.4 Library Handler Input
+# Handler Input
 import docx
 import pdfplumber
 import speech_recognition as sr
 import requests
 from bs4 import BeautifulSoup
 
-# --- Konfigurasi Awal ---
+
+# --- INISIALISASI MODEL ---
 @st.cache_resource
 def inisialisasi_model():
     """Menginisialisasi model Sastrawi"""
@@ -35,28 +36,21 @@ def inisialisasi_model():
     
     return stemmer, stopword_remover
 
-# Panggil fungsi inisialisasi
 try:
     stemmer, stopword_remover = inisialisasi_model()
-    st.success("✅ Model Sastrawi berhasil dimuat", icon="✅")
 except Exception as e:
     st.error(f"❌ Gagal memuat model Sastrawi: {e}")
     st.stop()
 
 
-# --- (BAGIAN 1) FUNGSI PREPROCESSING ---
-
+# --- FUNGSI PREPROCESSING ---
 def tokenize_manual(text):
-    """
-    Tokenisasi manual menggunakan regex.
-    Lebih stabil daripada NLTK word_tokenize.
-    """
-    # Pisahkan kata berdasarkan huruf dan angka
+    """Tokenisasi manual menggunakan regex"""
     tokens = re.findall(r'\b[a-zA-Z]+\b', text)
     return tokens
 
 def preprocess_text(text):
-    """Fungsi preprocessing teks tanpa NLTK."""
+    """Fungsi preprocessing teks"""
     try:
         st.info("   📝 Case folding & cleaning...")
         text = text.lower()
@@ -85,13 +79,12 @@ def preprocess_text(text):
         return ""
 
 
-# --- (BAGIAN 2) FUNGSI ANALISIS ---
-
+# --- FUNGSI ANALISIS ---
 def run_analysis(list_dokumen_bersih):
     """Menganalisis dokumen dengan BoW, TF-IDF, dan Word2Vec"""
     st.header("📊 IMPLEMENTASI REPRESENTASI TEKS")
 
-    # --- METODE 1: BAG OF WORDS ---
+    # BAG OF WORDS
     st.subheader("1️⃣ Metode Bag of Words (BoW)")
     try:
         bow_vectorizer = CountVectorizer()
@@ -107,7 +100,6 @@ def run_analysis(list_dokumen_bersih):
         st.dataframe(df_bow, use_container_width=True)
         st.info("💡 **Penjelasan:** Menghitung frekuensi kemunculan setiap kata dalam dokumen.")
         
-        # Statistik
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Total Kata Unik", len(fitur_bow))
@@ -117,7 +109,7 @@ def run_analysis(list_dokumen_bersih):
     except ValueError as e:
         st.error(f"❌ ERROR BoW: {e}")
 
-    # --- METODE 2: TF-IDF ---
+    # TF-IDF
     st.subheader("2️⃣ Metode TF-IDF")
     try:
         tfidf_vectorizer = TfidfVectorizer()
@@ -133,7 +125,6 @@ def run_analysis(list_dokumen_bersih):
         st.dataframe(df_tfidf.round(4), use_container_width=True)
         st.info("💡 **Penjelasan:** Memberi bobot kata berdasarkan frekuensi dan kelangkaannya di seluruh dokumen.")
         
-        # Kata dengan TF-IDF tertinggi
         max_tfidf = df_tfidf.max().sort_values(ascending=False).head(5)
         st.write("**Top 5 Kata Berdasarkan TF-IDF:**")
         st.bar_chart(max_tfidf)
@@ -141,7 +132,7 @@ def run_analysis(list_dokumen_bersih):
     except ValueError as e:
         st.error(f"❌ ERROR TF-IDF: {e}")
 
-    # --- METODE 3: WORD2VEC ---
+    # WORD2VEC
     st.subheader("3️⃣ Metode Word2Vec")
     try:
         tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
@@ -153,7 +144,6 @@ def run_analysis(list_dokumen_bersih):
         st.write("**Input untuk Word2Vec (Sample):**")
         st.code(str(tokenized_docs_w2v[:2]), language="python")
         
-        # Training Word2Vec
         with st.spinner("🔄 Melatih model Word2Vec..."):
             model_w2v = Word2Vec(
                 sentences=tokenized_docs_w2v, 
@@ -166,19 +156,16 @@ def run_analysis(list_dokumen_bersih):
         
         st.success("✅ Model Word2Vec berhasil dilatih!")
         
-        # Vocabulary info
         vocab_size = len(model_w2v.wv.index_to_key)
         st.metric("Ukuran Vocabulary", vocab_size)
         
         if model_w2v.wv.index_to_key:
             kata_uji = model_w2v.wv.index_to_key[0]
             
-            # Tampilkan vektor
             st.write(f"**Contoh Vektor untuk kata '{kata_uji}'** (10 dimensi pertama):")
             vektor = model_w2v.wv[kata_uji][:10].tolist()
             st.json({f"dim_{i}": round(v, 4) for i, v in enumerate(vektor)})
 
-            # Kata mirip
             try:
                 kata_mirip = model_w2v.wv.most_similar(kata_uji, topn=5)
                 st.write(f"**Kata yang paling mirip dengan '{kata_uji}':**")
@@ -195,53 +182,41 @@ def run_analysis(list_dokumen_bersih):
         st.error(f"❌ ERROR Word2Vec: {e}")
 
 
-# --- (BAGIAN 3) FUNGSI HANDLER INPUT ---
-
+# --- HANDLER INPUT ---
 def handle_url(url):
-    """Ekstrak teks dari URL artikel menggunakan BeautifulSoup"""
+    """Ekstrak teks dari URL menggunakan BeautifulSoup"""
     st.info(f"🌐 Mengunduh artikel dari: {url}")
     try:
-        # Set headers untuk menghindari blocking
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        # Download halaman
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
-        # Parse dengan BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Hapus script dan style
         for script in soup(["script", "style"]):
             script.decompose()
         
-        # Ekstrak teks dari paragraf
         paragraphs = soup.find_all(['p', 'article', 'div'])
         text_list = []
         
         for para in paragraphs:
             text = para.get_text(strip=True)
-            if len(text) > 50:  # Filter teks yang terlalu pendek
+            if len(text) > 50:
                 text_list.append(text)
         
         full_text = '\n'.join(text_list)
         
         if len(full_text) < 100:
-            st.warning("⚠️ Teks yang diekstrak terlalu pendek. Coba URL lain.")
+            st.warning("⚠️ Teks yang diekstrak terlalu pendek.")
             return ""
         
         return full_text
         
-    except requests.exceptions.Timeout:
-        st.error("❌ Timeout: Server terlalu lama merespons.")
-        return ""
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Gagal mengambil artikel: {e}")
-        return ""
     except Exception as e:
-        st.error(f"❌ Error parsing artikel: {e}")
+        st.error(f"❌ Gagal mengambil artikel: {e}")
         return ""
 
 def handle_audio(file_path):
@@ -258,7 +233,7 @@ def handle_audio(file_path):
         return ""
 
 def handle_doc(file_path, file_extension):
-    """Ekstrak teks dari dokumen (.txt, .pdf, .docx)"""
+    """Ekstrak teks dari dokumen"""
     text = ""
     try:
         if file_extension == '.txt':
@@ -294,13 +269,10 @@ def save_uploaded_file(uploaded_file):
         return None
 
 
-# --- (BAGIAN 4) APLIKASI UTAMA ---
-
-# Inisialisasi session state
+# --- APLIKASI UTAMA ---
 if 'dokumen_mentah_list' not in st.session_state:
     st.session_state.dokumen_mentah_list = []
 
-# --- UI HEADER ---
 st.title("🚀 Program Analisis Teks NLP")
 st.markdown("""
 **Aplikasi ini melakukan:**
@@ -311,10 +283,10 @@ st.markdown("""
 
 st.divider()
 
-# --- SIDEBAR: INPUT DATA ---
+# SIDEBAR
 st.sidebar.header("📥 Input Data")
 
-# INPUT 1: URL
+# INPUT URL
 with st.sidebar.expander("🌐 Dari URL"):
     url_input = st.text_input("Masukkan URL artikel")
     if st.button("Proses URL", key="btn_url"):
@@ -323,16 +295,15 @@ with st.sidebar.expander("🌐 Dari URL"):
                 teks_mentah = handle_url(url_input)
                 if teks_mentah:
                     st.session_state.dokumen_mentah_list.append(teks_mentah)
-                    st.success(f"✅ URL berhasil diproses! Total dokumen: {len(st.session_state.dokumen_mentah_list)}")
+                    st.success(f"✅ URL berhasil! Total: {len(st.session_state.dokumen_mentah_list)}")
         else:
             st.warning("⚠️ Harap masukkan URL.")
 
-# INPUT 2: FILE UPLOAD
+# INPUT FILE
 with st.sidebar.expander("📁 Dari File"):
     uploaded_file = st.file_uploader(
         "Pilih file", 
-        type=["wav", "mp3", "pdf", "docx", "txt"],
-        help="Format yang didukung: Audio (WAV, MP3), Dokumen (PDF, DOCX, TXT)"
+        type=["wav", "mp3", "pdf", "docx", "txt"]
     )
     
     if uploaded_file is not None:
@@ -348,43 +319,34 @@ with st.sidebar.expander("📁 Dari File"):
                     
                     teks_mentah = ""
                     
-                    # Pilih handler
                     if file_extension in ['.wav', '.mp3']:
                         teks_mentah = handle_audio(file_path)
                     elif file_extension in ['.txt', '.pdf', '.docx']:
                         teks_mentah = handle_doc(file_path, file_extension)
-                    else:
-                        st.error(f"❌ Format '{file_extension}' tidak didukung.")
                     
-                    # Hapus file temporary
                     try:
                         os.remove(file_path)
                     except:
                         pass
                     
-                    # Tambahkan ke list jika berhasil
                     if teks_mentah:
                         st.session_state.dokumen_mentah_list.append(teks_mentah)
-                        st.success(f"✅ File berhasil diekstrak! Total dokumen: {len(st.session_state.dokumen_mentah_list)}")
+                        st.success(f"✅ File berhasil! Total: {len(st.session_state.dokumen_mentah_list)}")
                         
-                        with st.expander("👁️ Lihat teks hasil ekstraksi"):
-                            st.text_area("", teks_mentah, height=150, key="preview_text")
+                        with st.expander("👁️ Lihat hasil ekstraksi"):
+                            st.text_area("", teks_mentah, height=150)
 
-# Tombol reset
-if st.sidebar.button("🗑️ Hapus Semua Dokumen", type="secondary"):
+if st.sidebar.button("🗑️ Hapus Semua Dokumen"):
     st.session_state.dokumen_mentah_list = []
     st.rerun()
 
-# Status dokumen
 st.sidebar.divider()
 st.sidebar.metric("📚 Total Dokumen", len(st.session_state.dokumen_mentah_list))
 
-# --- MAIN CONTENT ---
-
-# Tampilkan dokumen yang terkumpul
+# MAIN CONTENT
 if st.button("📋 Tampilkan Dokumen Terkumpul"):
     if not st.session_state.dokumen_mentah_list:
-        st.warning("⚠️ Belum ada dokumen yang dikumpulkan.")
+        st.warning("⚠️ Belum ada dokumen.")
     else:
         st.subheader(f"📚 Total {len(st.session_state.dokumen_mentah_list)} Dokumen")
         
@@ -394,12 +356,11 @@ if st.button("📋 Tampilkan Dokumen Terkumpul"):
 
 st.divider()
 
-# Tombol untuk analisis
 st.header("🎯 Jalankan Analisis")
 
 if st.button("▶️ MULAI PREPROCESSING & ANALISIS", type="primary", use_container_width=True):
     if not st.session_state.dokumen_mentah_list:
-        st.error("❌ Tidak ada dokumen untuk dianalisis. Silakan tambahkan dokumen terlebih dahulu.")
+        st.error("❌ Tidak ada dokumen untuk dianalisis.")
     else:
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -419,30 +380,24 @@ if st.button("▶️ MULAI PREPROCESSING & ANALISIS", type="primary", use_contai
                 if hasil_proses:
                     list_dokumen_bersih.append(hasil_proses)
                     st.text_area(
-                        f"Hasil Bersih (Dokumen {i+1})", 
+                        f"Hasil Bersih", 
                         hasil_proses, 
                         height=100, 
-                        key=f"clean_doc_{i}"
+                        key=f"clean_{i}"
                     )
-                else:
-                    st.error(f"❌ Dokumen {i+1} gagal diproses.")
         
         progress_bar.empty()
         status_text.empty()
         
         if not list_dokumen_bersih:
-            st.error("❌ Semua dokumen gagal diproses. Tidak ada yang bisa dianalisis.")
+            st.error("❌ Semua dokumen gagal diproses.")
         else:
-            st.success(f"✅ Preprocessing selesai! {len(list_dokumen_bersih)} dokumen berhasil diproses.")
+            st.success(f"✅ Preprocessing selesai! {len(list_dokumen_bersih)} dokumen berhasil.")
             
             st.divider()
-            
-            # Jalankan analisis
             run_analysis(list_dokumen_bersih)
-            
             st.balloons()
 
-# Footer
 st.divider()
 st.markdown("""
 <div style='text-align: center; color: gray; padding: 20px;'>
