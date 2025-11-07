@@ -9,4 +9,3 @@ pdfplumber
 SpeechRecognition
 requests
 beautifulsoup4
-lxml
