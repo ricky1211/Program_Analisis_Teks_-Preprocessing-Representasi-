@@ -288,7 +288,12 @@ if st.button("MULAI PREPROCESSING & ANALISIS", type="primary"):
         with st.spinner("Analisis sedang berjalan... Ini mungkin butuh waktu lama..."):
             st.subheader("--- 1. PROSES PREPROCESSING DIMULAI ---")
             list_dokumen_bersih = []
-            for i, doc_mentah in enumerate(list_dokumen_mentah_dari_input):
+            
+            # === PERBAIKAN UNTUK NameError ===
+            # Menggunakan st.session_state.dokumen_mentah_list
+            for i, doc_mentah in enumerate(st.session_state.dokumen_mentah_list):
+            # =================================
+            
                 st.write(f"Memproses Dokumen {i+1}...")
                 hasil_proses = preprocess_text(doc_mentah)
                 list_dokumen_bersih.append(hasil_proses)
