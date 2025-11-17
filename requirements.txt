@@ -1,34 +1,32 @@
 # Web Framework
-streamlit>=1.28.0
+streamlit
 
 # Data Processing
-pandas>=2.0.0
-numpy>=1.24.0
+pandas
+numpy
 
 # Indonesian NLP
-Sastrawi>=1.0.1
+Sastrawi
 
 # Machine Learning & Text Representation
-scikit-learn>=1.3.0
-gensim>=4.3.0
+scikit-learn
+gensim
 
 # Advanced NLP
-nltk>=3.8.1
+nltk
 
 # Document Processing
-python-docx>=0.8.11
-pdfplumber>=0.9.0
+python-docx
+pdfplumber
 
 # Web Scraping
-newspaper3k>=0.2.8
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
+requests
+beautifulsoup4
+lxml
 
-# Audio Processing
-SpeechRecognition>=3.10.0
-PyAudio>=0.2.13
+# Audio Processing (Optional - skip if error)
+# SpeechRecognition
+# PyAudio
 
 # Additional Dependencies
-pillow>=10.0.0
-openpyxl>=3.1.0
+pillow
