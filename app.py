@@ -1,3 +1,9 @@
+"""
+Program Analisis Teks NLP
+Aplikasi Streamlit untuk analisis teks bahasa Indonesia
+dengan fitur POS Tagging, NER, Parsing, dan Text Representation
+"""
+
 # --- IMPORT LIBRARY ---
 import re
 import pandas as pd
@@ -16,12 +22,21 @@ from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFacto
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from gensim.models import Word2Vec
 
-# Handler Input
+# Document Processing
 import docx
 import pdfplumber
-import speech_recognition as sr
+
+# Web Scraping
 import requests
 from bs4 import BeautifulSoup
+
+# Optional: Speech Recognition
+SPEECH_RECOGNITION_AVAILABLE = False
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    pass
 
 # NLP Advanced
 import nltk
@@ -30,7 +45,8 @@ from nltk.tokenize import word_tokenize
 from nltk.tree import Tree
 from nltk.chunk import ne_chunk
 
-# Download NLTK data (semua yang diperlukan)
+
+# --- DOWNLOAD NLTK DATA ---
 @st.cache_resource
 def download_nltk_data():
     """Download semua data NLTK yang diperlukan"""
@@ -523,6 +539,11 @@ def handle_url(url):
 
 def handle_audio(file_path):
     """Transkripsi audio ke teks"""
+    if not SPEECH_RECOGNITION_AVAILABLE:
+        st.error("❌ SpeechRecognition tidak terinstall.")
+        st.info("💡 Untuk menggunakan fitur audio, install dengan:\n```bash\npip install SpeechRecognition\n```")
+        return ""
+    
     st.info(f"🎤 Mentranskripsi file audio...")
     recognizer = sr.Recognizer()
     try:
@@ -618,10 +639,19 @@ with st.sidebar.expander("🌐 Dari URL"):
 
 # INPUT FILE
 with st.sidebar.expander("📁 Dari File"):
+    # Tentukan file types yang didukung
+    file_types = ["pdf", "docx", "txt"]
+    if SPEECH_RECOGNITION_AVAILABLE:
+        file_types.extend(["wav", "mp3"])
+    
     uploaded_file = st.file_uploader(
         "Pilih file", 
-        type=["wav", "mp3", "pdf", "docx", "txt"]
+        type=file_types
     )
+    
+    # Tampilkan info jika audio tidak tersedia
+    if not SPEECH_RECOGNITION_AVAILABLE:
+        st.warning("⚠️ Fitur audio tidak tersedia (SpeechRecognition belum terinstall)")
     
     if uploaded_file is not None:
         st.info(f"📄 File: {uploaded_file.name}")
@@ -631,110 +661,116 @@ with st.sidebar.expander("📁 Dari File"):
                 file_path = save_uploaded_file(uploaded_file)
                 
                 if file_path:
-                    _, file_extension = os.path.splitext(uploaded_file.name)
-                    file_extension = file_extension.lower()
-                    
-                    teks_mentah = ""
-                    
-                    if file_extension in ['.wav', '.mp3']:
-                        teks_mentah = handle_audio(file_path)
-                    elif file_extension in ['.txt', '.pdf', '.docx']:
-                        teks_mentah = handle_doc(file_path, file_extension)
-                    
                     try:
-                        os.remove(file_path)
-                    except:
-                        pass
-                    
-                    if teks_mentah:
-                        st.session_state.dokumen_mentah_list.append(teks_mentah)
-                        st.success(f"✅ File berhasil! Total: {len(st.session_state.dokumen_mentah_list)}")
-                        
-                        with st.expander("👁️ Lihat hasil ekstraksi"):
-                            st.text_area("", teks_mentah, height=150)
+                        _, file_extension = os.path.splitext(file_path)
+                        file_extension = file_extension.lower()
+                        teks_mentah = ""
 
-if st.sidebar.button("🗑️ Hapus Semua Dokumen"):
-    st.session_state.dokumen_mentah_list = []
-    st.rerun()
+                        if file_extension in ['.wav', '.mp3']:
+                            teks_mentah = handle_audio(file_path)
+                        elif file_extension in ['.pdf', '.docx', '.txt']:
+                            teks_mentah = handle_doc(file_path, file_extension)
+                        else:
+                            st.error(f"❌ Format file {file_extension} tidak didukung.")
+
+                        if teks_mentah:
+                            st.session_state.dokumen_mentah_list.append(teks_mentah)
+                            st.success(f"✅ File berhasil diproses! Total: {len(st.session_state.dokumen_mentah_list)}")
+                        else:
+                            st.warning("⚠️ Gagal mengekstrak teks dari file.")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Error saat memproses file: {e}")
+                    finally:
+                        # Selalu hapus file sementara
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+
+# INPUT TEKS MANUAL
+with st.sidebar.expander("✍️ Dari Teks Manual"):
+    manual_text = st.text_area("Masukkan teks di sini")
+    if st.button("Proses Teks", key="btn_text"):
+        if manual_text.strip():
+            st.session_state.dokumen_mentah_list.append(manual_text.strip())
+            st.success(f"✅ Teks berhasil ditambahkan! Total: {len(st.session_state.dokumen_mentah_list)}")
+        else:
+            st.warning("⚠️ Harap masukkan teks.")
 
 st.sidebar.divider()
-st.sidebar.metric("📚 Total Dokumen", len(st.session_state.dokumen_mentah_list))
 
-# MAIN CONTENT
-if st.button("📋 Tampilkan Dokumen Terkumpul"):
-    if not st.session_state.dokumen_mentah_list:
-        st.warning("⚠️ Belum ada dokumen.")
-    else:
-        st.subheader(f"📚 Total {len(st.session_state.dokumen_mentah_list)} Dokumen")
-        
-        for i, doc in enumerate(st.session_state.dokumen_mentah_list):
-            with st.expander(f"📄 Dokumen {i+1} ({len(doc)} karakter)"):
-                st.text_area("", doc, height=150, key=f"doc_raw_{i}", disabled=True)
+# KONTROL ANALISIS
+st.sidebar.header("⚙️ Kontrol Analisis")
+run_button = st.sidebar.button("🚀 Jalankan Analisis NLP", type="primary", use_container_width=True)
+
+if st.sidebar.button("🗑️ Bersihkan Semua Data", use_container_width=True):
+    st.session_state.dokumen_mentah_list = []
+    st.success("✅ Semua data telah dibersihkan!")
+    st.rerun()
 
 st.divider()
 
-st.header("🎯 Jalankan Analisis")
+# --- PANEL UTAMA (MAIN PANEL) ---
 
-if st.button("▶️ MULAI PREPROCESSING & ANALISIS", type="primary", use_container_width=True):
-    if not st.session_state.dokumen_mentah_list:
-        st.error("❌ Tidak ada dokumen untuk dianalisis.")
-    else:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        st.subheader("🔄 PROSES PREPROCESSING")
-        list_dokumen_bersih = []
-        
-        total_docs = len(st.session_state.dokumen_mentah_list)
-        
-        for i, doc_mentah in enumerate(st.session_state.dokumen_mentah_list):
-            status_text.text(f"Memproses dokumen {i+1}/{total_docs}...")
-            progress_bar.progress((i + 1) / total_docs)
-            
-            with st.expander(f"📝 Preprocessing Dokumen {i+1}", expanded=(i==0)):
-                hasil_proses = preprocess_text(doc_mentah)
-                
-                if hasil_proses:
-                    list_dokumen_bersih.append(hasil_proses)
-                    st.text_area(
-                        f"Hasil Bersih", 
-                        hasil_proses, 
-                        height=100, 
-                        key=f"clean_{i}"
-                    )
-        
-        progress_bar.empty()
-        status_text.empty()
-        
-        if not list_dokumen_bersih:
-            st.error("❌ Semua dokumen gagal diproses.")
-        else:
-            st.success(f"✅ Preprocessing selesai! {len(list_dokumen_bersih)} dokumen berhasil.")
-            
-            st.divider()
-            
-            # === ANALISIS LANJUTAN DENGAN DOKUMEN MENTAH ===
-            st.title("🎓 ANALISIS LANJUTAN NLP")
-            
-            # A - POS Tagging
-            pos_tagging_analysis(st.session_state.dokumen_mentah_list)
-            st.divider()
-            
-            # B - Named Entity Recognition
-            named_entity_recognition(st.session_state.dokumen_mentah_list)
-            st.divider()
-            
-            # C - Constituency & Dependency Parsing
-            parsing_analysis(st.session_state.dokumen_mentah_list)
-            st.divider()
-            
-            # === ANALISIS REPRESENTASI TEKS ===
-            run_analysis(list_dokumen_bersih)
-            st.balloons()
+# Cek jika ada data untuk diproses
+if not st.session_state.dokumen_mentah_list:
+    st.info("👋 Selamat datang! Silakan masukkan data melalui sidebar (URL, File, atau Teks) untuk memulai analisis.")
+    st.stop()
 
-st.divider()
-st.markdown("""
-<div style='text-align: center; color: gray; padding: 20px;'>
-    <small>📚 Program Analisis Teks NLP | Dibuat dengan Streamlit</small>
-</div>
-""", unsafe_allow_html=True)
+# Tampilkan dokumen mentah yang sudah diinput
+st.header("1. 📜 Teks Mentah (Input)")
+for i, doc in enumerate(st.session_state.dokumen_mentah_list):
+    with st.expander(f"Dokumen {i+1} - {doc[:60]}..."):
+        st.text_area(f"Teks Dokumen {i+1}", doc, height=200, key=f"raw_doc_{i}")
+
+# Jika tombol "Jalankan Analisis" ditekan
+if run_button:
+    
+    # 2. PREPROCESSING
+    st.header("2. ⚙️ Proses Preprocessing")
+    st.write("Teks dibersihkan (case folding, cleaning, stopword removal, stemming) untuk analisis Representasi Teks.")
+    
+    list_dokumen_bersih = []
+    
+    for i, doc_mentah in enumerate(st.session_state.dokumen_mentah_list):
+        st.subheader(f"Dokumen {i+1}")
+        with st.spinner(f"Memproses Dokumen {i+1}..."):
+            hasil_bersih = preprocess_text(doc_mentah)
+            
+            if hasil_bersih:
+                list_dokumen_bersih.append(hasil_bersih)
+                st.text_area("Hasil Preprocessing:", hasil_bersih, height=100, key=f"clean_doc_{i}")
+            else:
+                st.warning("⚠️ Tidak ada hasil setelah preprocessing (mungkin teks terlalu pendek atau hanya berisi stopword).")
+
+    # Pastikan ada hasil bersih sebelum lanjut
+    if not list_dokumen_bersih:
+        st.error("❌ Tidak ada teks yang tersisa setelah preprocessing. Analisis dihentikan.")
+        st.stop()
+
+    st.success("✅ Semua dokumen berhasil di-preprocess!")
+    st.divider()
+
+    # 3. ANALISIS NLP LANJUTAN (POS, NER, PARSING)
+    st.header("3. 🧠 Analisis NLP Lanjutan")
+    st.info("""
+    Analisis berikut (POS Tagging, NER, dan Parsing) dijalankan pada **teks mentah** (sebelum preprocessing) untuk menjaga struktur gramatikal dan entitas (seperti nama dan lokasi).
+    """)
+    
+    # Panggil fungsi analisis lanjutan
+    pos_tagging_analysis(st.session_state.dokumen_mentah_list)
+    st.divider()
+    named_entity_recognition(st.session_state.dokumen_mentah_list)
+    st.divider()
+    parsing_analysis(st.session_state.dokumen_mentah_list)
+    st.divider()
+
+    # 4. ANALISIS REPRESENTASI TEKS (BoW, TF-IDF, W2V)
+    st.info("""
+    Analisis Representasi Teks (BoW, TF-IDF, Word2Vec) dijalankan pada **teks bersih** (setelah preprocessing) untuk mendapatkan fitur kata yang relevan.
+    """)
+    
+    # Panggil fungsi representasi teks
+    run_analysis(list_dokumen_bersih)
+
+    st.balloons()
+    st.success("🎉 Analisis Selesai!")
