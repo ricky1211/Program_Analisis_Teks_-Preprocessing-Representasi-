@@ -30,22 +30,58 @@ from nltk.tokenize import word_tokenize
 from nltk.tree import Tree
 from nltk.chunk import ne_chunk
 
-# Download NLTK data (hanya jika belum ada)
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
+# Download NLTK data (semua yang diperlukan)
+@st.cache_resource
+def download_nltk_data():
+    """Download semua data NLTK yang diperlukan"""
+    nltk_packages = [
+        'punkt',
+        'punkt_tab',
+        'averaged_perceptron_tagger',
+        'averaged_perceptron_tagger_eng',
+        'maxent_ne_chunker',
+        'maxent_ne_chunker_tab',
+        'words'
+    ]
     
+    for package in nltk_packages:
+        try:
+            nltk.data.find(f'tokenizers/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except:
+                pass
+        
+        try:
+            nltk.data.find(f'taggers/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except:
+                pass
+        
+        try:
+            nltk.data.find(f'chunkers/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except:
+                pass
+        
+        try:
+            nltk.data.find(f'corpora/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except:
+                pass
+
+# Download data NLTK
 try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    
-try:
-    nltk.data.find('chunkers/maxent_ne_chunker')
-except LookupError:
-    nltk.download('maxent_ne_chunker', quiet=True)
-    nltk.download('words', quiet=True)
+    download_nltk_data()
+except Exception as e:
+    st.warning(f"⚠️ Beberapa data NLTK gagal didownload: {e}")
 
 
 # --- INISIALISASI MODEL ---
@@ -215,11 +251,27 @@ def pos_tagging_analysis(list_dokumen_mentah):
     for idx, doc in enumerate(list_dokumen_mentah):
         with st.expander(f"📄 POS Tagging - Dokumen {idx+1}", expanded=(idx==0)):
             try:
-                # Tokenisasi
-                tokens = word_tokenize(doc.lower())
+                # Tokenisasi dengan error handling
+                try:
+                    tokens = word_tokenize(doc.lower())
+                except LookupError as e:
+                    st.error(f"❌ Error NLTK: {e}")
+                    st.warning("⚠️ Silakan klik 'Setup NLTK' di bagian atas untuk download data yang diperlukan.")
+                    st.info("💡 Atau jalankan di Python:\n```python\nimport nltk\nnltk.download('punkt')\nnltk.download('punkt_tab')\nnltk.download('averaged_perceptron_tagger')\n```")
+                    return
                 
-                # POS Tagging
-                pos_tags = pos_tag(tokens)
+                if not tokens:
+                    st.warning("⚠️ Tidak ada token yang dihasilkan")
+                    continue
+                
+                # POS Tagging dengan error handling
+                try:
+                    pos_tags = pos_tag(tokens)
+                except LookupError as e:
+                    st.error(f"❌ Error NLTK POS Tagger: {e}")
+                    st.warning("⚠️ Silakan download data NLTK yang diperlukan.")
+                    st.info("💡 Jalankan:\n```python\nimport nltk\nnltk.download('averaged_perceptron_tagger')\nnltk.download('averaged_perceptron_tagger_eng')\n```")
+                    return
                 
                 # Tampilkan dalam tabel
                 df_pos = pd.DataFrame(pos_tags, columns=['Word', 'POS Tag'])
@@ -533,6 +585,18 @@ st.markdown("""
 - 📊 Representasi Teks (Bag of Words, TF-IDF, Word2Vec)
 - 📁 Mendukung berbagai input: URL, PDF, DOCX, TXT, Audio
 """)
+
+# Tombol untuk download NLTK data secara manual
+with st.expander("⚙️ Setup NLTK (Klik jika ada error NLTK)"):
+    st.write("Jika mengalami error NLTK, klik tombol di bawah untuk download data:")
+    if st.button("📥 Download NLTK Data"):
+        with st.spinner("Downloading NLTK data..."):
+            try:
+                nltk.download('all', quiet=False)
+                st.success("✅ NLTK data berhasil didownload!")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+                st.info("💡 Alternatif: Jalankan di terminal:\n```python\nimport nltk\nnltk.download('all')\n```")
 
 st.divider()
 
