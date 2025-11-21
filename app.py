@@ -1,9 +1,3 @@
-"""
-Program Analisis Teks NLP
-Aplikasi Streamlit untuk analisis teks bahasa Indonesia
-dengan fitur POS Tagging, NER, Parsing, dan Text Representation
-"""
-
 # --- IMPORT LIBRARY ---
 import re
 import pandas as pd
@@ -29,6 +23,18 @@ import pdfplumber
 # Web Scraping
 import requests
 from bs4 import BeautifulSoup
+
+# Deep Learning
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Bidirectional, SimpleRNN
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Optional: Speech Recognition
 SPEECH_RECOGNITION_AVAILABLE = False
@@ -62,9 +68,11 @@ def download_nltk_data():
     
     for package in nltk_packages:
         try:
+            # Cek di path standard NLTK
             nltk.data.find(f'tokenizers/{package}')
         except LookupError:
             try:
+                # Coba download jika tidak ada
                 nltk.download(package, quiet=True)
             except:
                 pass
@@ -116,12 +124,14 @@ try:
     stemmer, stopword_remover = inisialisasi_model()
 except Exception as e:
     st.error(f"❌ Gagal memuat model Sastrawi: {e}")
+    # Jika gagal, hentikan aplikasi (penting untuk preprocessing)
     st.stop()
 
 
 # --- FUNGSI PREPROCESSING ---
 def tokenize_manual(text):
     """Tokenisasi manual menggunakan regex"""
+    # Mencari kata yang hanya terdiri dari huruf
     tokens = re.findall(r'\b[a-zA-Z]+\b', text)
     return tokens
 
@@ -130,6 +140,7 @@ def preprocess_text(text):
     try:
         st.info("   📝 Case folding & cleaning...")
         text = text.lower()
+        # Hapus karakter selain huruf dan spasi
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
         st.info("   ✂️ Tokenizing...")
@@ -144,6 +155,7 @@ def preprocess_text(text):
         
         st.info("   🌱 Stemming...")
         tokens_tanpa_stopword = text_tanpa_stopword.split()
+        # Stemming hanya pada token yang tersisa
         stemmed_tokens = [stemmer.stem(token) for token in tokens_tanpa_stopword]
         
         hasil = ' '.join(stemmed_tokens)
@@ -159,6 +171,7 @@ def preprocess_text(text):
 def run_analysis(list_dokumen_bersih):
     """Menganalisis dokumen dengan BoW, TF-IDF, dan Word2Vec"""
     st.header("📊 IMPLEMENTASI REPRESENTASI TEKS")
+    st.markdown("---")
 
     # BAG OF WORDS
     st.subheader("1️⃣ Metode Bag of Words (BoW)")
@@ -174,16 +187,18 @@ def run_analysis(list_dokumen_bersih):
         )
         
         st.dataframe(df_bow, use_container_width=True)
-        st.info("💡 **Penjelasan:** Menghitung frekuensi kemunculan setiap kata dalam dokumen.")
+        st.info("💡 **Penjelasan:** Menghitung frekuensi kemunculan setiap kata unik (*term frequency*) dalam dokumen.")
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Total Kata Unik", len(fitur_bow))
+            st.metric("Total Kata Unik (Vocabulary Size)", len(fitur_bow))
         with col2:
-            st.metric("Total Kata (Sum)", int(bow_matrix.sum()))
+            st.metric("Total Kemunculan Kata", int(bow_matrix.sum()))
             
     except ValueError as e:
         st.error(f"❌ ERROR BoW: {e}")
+
+    st.markdown("---")
 
     # TF-IDF
     st.subheader("2️⃣ Metode TF-IDF")
@@ -199,18 +214,21 @@ def run_analysis(list_dokumen_bersih):
         )
         
         st.dataframe(df_tfidf.round(4), use_container_width=True)
-        st.info("💡 **Penjelasan:** Memberi bobot kata berdasarkan frekuensi dan kelangkaannya di seluruh dokumen.")
+        st.info("💡 **Penjelasan:** Memberi bobot kata berdasarkan frekuensi (TF) dan kelangkaannya (IDF) di seluruh dokumen. Nilai yang lebih tinggi menandakan kata tersebut penting dan spesifik untuk dokumen tersebut.")
         
         max_tfidf = df_tfidf.max().sort_values(ascending=False).head(5)
-        st.write("**Top 5 Kata Berdasarkan TF-IDF:**")
+        st.write("**Top 5 Kata Berdasarkan Bobot TF-IDF Tertinggi:**")
         st.bar_chart(max_tfidf)
         
     except ValueError as e:
         st.error(f"❌ ERROR TF-IDF: {e}")
 
+    st.markdown("---")
+
     # WORD2VEC
     st.subheader("3️⃣ Metode Word2Vec")
     try:
+        # Word2Vec membutuhkan list of list of tokens
         tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
         
         if not tokenized_docs_w2v:
@@ -218,14 +236,16 @@ def run_analysis(list_dokumen_bersih):
             return
 
         st.write("**Input untuk Word2Vec (Sample):**")
-        st.code(str(tokenized_docs_w2v[:2]), language="python")
+        # Ambil maksimal 50 kata pertama dari 2 dokumen
+        sample_code = [doc[:50] for doc in tokenized_docs_w2v[:2]]
+        st.code(str(sample_code).replace('\'', '"'), language="python")
         
-        with st.spinner("🔄 Melatih model Word2Vec..."):
+        with st.spinner("🔄 Melatih model Word2Vec (Vector Size=100, Window=5)..."):
             model_w2v = Word2Vec(
                 sentences=tokenized_docs_w2v, 
-                vector_size=100, 
-                window=5, 
-                min_count=1, 
+                vector_size=100, # Ukuran vektor
+                window=5,        # Jarak maksimum antara kata
+                min_count=1,     # Abaikan kata dengan frekuensi kurang dari ini
                 workers=4,
                 epochs=10
             )
@@ -236,26 +256,308 @@ def run_analysis(list_dokumen_bersih):
         st.metric("Ukuran Vocabulary", vocab_size)
         
         if model_w2v.wv.index_to_key:
-            kata_uji = model_w2v.wv.index_to_key[0]
+            kata_uji = model_w2v.wv.index_to_key[0] # Ambil kata pertama di vocabulary
             
             st.write(f"**Contoh Vektor untuk kata '{kata_uji}'** (10 dimensi pertama):")
+            # Word2Vec menghasilkan vektor numerik (Embedding)
             vektor = model_w2v.wv[kata_uji][:10].tolist()
-            st.json({f"dim_{i}": round(v, 4) for i, v in enumerate(vektor)})
+            st.json({f"dim_{i+1}": round(v, 4) for i, v in enumerate(vektor)})
 
             try:
                 kata_mirip = model_w2v.wv.most_similar(kata_uji, topn=5)
-                st.write(f"**Kata yang paling mirip dengan '{kata_uji}':**")
+                st.write(f"**Kata yang paling mirip/berdekatan dengan '{kata_uji}' (Semantic Similarity):**")
                 
                 df_mirip = pd.DataFrame(kata_mirip, columns=['Kata', 'Similarity Score'])
                 st.dataframe(df_mirip, use_container_width=True)
                 
             except KeyError:
                 st.warning(f"⚠️ Kata '{kata_uji}' tidak memiliki kata mirip.")
+            except IndexError:
+                st.warning("⚠️ Vocabulary Word2Vec terlalu kecil.")
         else:
-            st.error("❌ Vocabulary kosong.")
+            st.error("❌ Vocabulary Word2Vec kosong.")
             
     except Exception as e:
         st.error(f"❌ ERROR Word2Vec: {e}")
+
+
+# --- FUNGSI DEEP LEARNING (RNN/LSTM) ---
+def generate_dummy_data():
+    """Generate data dummy untuk demonstrasi klasifikasi sentimen biner (0/1)"""
+    positive_texts = [
+        "this movie is amazing and fantastic", "i love this product it works great",
+        "excellent service highly recommend", "best experience ever very satisfied",
+        "wonderful performance absolutely brilliant", "incredible quality worth every penny",
+        "outstanding results exceeded expectations", "fantastic features easy to use",
+        "great value for money", "superb craftsmanship top notch",
+        "impressive design beautiful look", "remarkable improvement love it",
+        "perfect solution exactly what needed", "exceptional quality highly pleased",
+        "amazing results very happy", "this is truly a masterpiece",
+        "so much fun to watch it again", "absolutely delightful time",
+        "the finest quality you can buy", "highly satisfied with my purchase"
+    ]
+    
+    negative_texts = [
+        "this is terrible very disappointed", "worst product ever waste of money",
+        "horrible experience never again", "poor quality not recommended",
+        "awful service very unhappy", "completely useless total disaster",
+        "disappointing results not worth it", "terrible design badly made",
+        "worst purchase regret buying", "very poor performance failed",
+        "bad quality broke quickly", "unsatisfactory service very poor",
+        "horrible experience waste time", "disappointing product not good",
+        "terrible service very bad", "i truly hate this product",
+        "never buy this item again", "waste of time and energy",
+        "not worth the attention it gets", "i feel cheated by this company"
+    ]
+    
+    texts = positive_texts + negative_texts
+    # 1 = Positive, 0 = Negative
+    labels = [1] * len(positive_texts) + [0] * len(negative_texts)
+    
+    return texts, np.array(labels)
+
+
+def deep_learning_classification(texts, labels):
+    """
+    Klasifikasi teks menggunakan RNN/LSTM
+    
+    Parameters:
+    - texts: list of strings (dokumen teks)
+    - labels: numpy array of integers (label klasifikasi)
+    """
+    st.header("🤖 DEEP LEARNING - RNN/LSTM CLASSIFICATION")
+    
+    st.info("""
+    **Deep Learning untuk Klasifikasi Teks:**
+    - Menggunakan arsitektur RNN (Simple RNN, LSTM, Bidirectional LSTM)
+    - Model memetakan kata menjadi vektor (Embedding) dan mempelajari urutan kata.
+    - Cocok untuk klasifikasi sentimen (demonstrasi ini), kategori dokumen, dll.
+    """)
+    
+    # Validasi input
+    if len(texts) < 10:
+        st.warning("⚠️ Data terlalu sedikit untuk training.")
+        return
+    
+    # PREPROCESSING UNTUK DEEP LEARNING
+    st.subheader("1️⃣ Preprocessing Data")
+    
+    with st.spinner("Memproses teks..."):
+        # Parameter
+        max_words = 5000  # Jumlah kata maksimum yang akan disimpan di vocabulary
+        max_len = 100     # Panjang maksimum sequence (dokumen)
+        
+        # Tokenisasi (Keras Tokenizer)
+        tokenizer = Tokenizer(num_words=max_words, oov_token="<OOV>")
+        tokenizer.fit_on_texts(texts)
+        
+        sequences = tokenizer.texts_to_sequences(texts)
+        # Padding Sequence
+        padded_sequences = pad_sequences(sequences, maxlen=max_len, padding='post', truncating='post')
+        
+        # Info preprocessing
+        vocab_size = len(tokenizer.word_index) + 1
+        st.success(f"✅ Preprocessing selesai!")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Vocabulary Size", vocab_size)
+        with col2:
+            st.metric("Max Sequence Length", max_len)
+        with col3:
+            st.metric("Total Samples", len(texts))
+    
+    st.markdown("---")
+    
+    # SPLIT DATA
+    st.subheader("2️⃣ Split Data (Train/Test)")
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        padded_sequences, labels, test_size=0.2, random_state=42
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Training Samples", len(X_train))
+    with col2:
+        st.metric("Testing Samples", len(X_test))
+    
+    st.markdown("---")
+    
+    # PILIH ARSITEKTUR MODEL
+    st.subheader("3️⃣ Desain Model")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        model_type = st.selectbox(
+            "Pilih Arsitektur Model:",
+            ["Simple RNN", "LSTM", "Bidirectional LSTM"],
+            key="model_type_select"
+        )
+    
+    with col2:
+        epochs = st.slider("Jumlah Epochs:", 5, 50, 10, key="epochs_slider")
+    
+    # BUILD MODEL
+    with st.spinner(f"Membangun model {model_type}..."):
+        model = Sequential()
+        
+        # Embedding Layer
+        embedding_dim = 128
+        model.add(Embedding(vocab_size, embedding_dim, input_length=max_len))
+        
+        # Recurrent Layer
+        if model_type == "Simple RNN":
+            model.add(SimpleRNN(64, return_sequences=False))
+        elif model_type == "LSTM":
+            model.add(LSTM(64, return_sequences=False))
+        elif model_type == "Bidirectional LSTM":
+            # Bidirectional LSTM dapat menangkap konteks maju dan mundur
+            model.add(Bidirectional(LSTM(64, return_sequences=False))) 
+        
+        model.add(Dropout(0.5)) # Regularisasi
+        model.add(Dense(32, activation='relu'))
+        model.add(Dropout(0.3))
+        
+        # Output Layer (Binary classification - 2 classes: Positive/Negative)
+        num_classes = len(np.unique(labels))
+        if num_classes == 2:
+            model.add(Dense(1, activation='sigmoid'))
+            loss_fn = 'binary_crossentropy'
+        else:
+            # Multi-class classification
+            model.add(Dense(num_classes, activation='softmax'))
+            loss_fn = 'sparse_categorical_crossentropy'
+        
+        # Compile Model
+        model.compile(
+            optimizer='adam',
+            loss=loss_fn,
+            metrics=['accuracy']
+        )
+    
+    st.success(f"✅ Model {model_type} berhasil dibuat!")
+    
+    # Tampilkan arsitektur model
+    with st.expander("📋 Lihat Arsitektur Model"):
+        model_summary = []
+        model.summary(print_fn=lambda x: model_summary.append(x))
+        st.code('\n'.join(model_summary))
+    
+    st.markdown("---")
+    
+    # TRAINING MODEL
+    st.subheader("4️⃣ Training Model dengan Backpropagation")
+    
+    if st.button("🚀 Mulai Training", type="primary", key="start_training_button"):
+        with st.spinner(f"Training model selama {epochs} epochs..."):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Custom callback untuk update progress
+            class StreamlitCallback(keras.callbacks.Callback):
+                def on_epoch_end(self, epoch, logs=None):
+                    progress = (epoch + 1) / epochs
+                    progress_bar.progress(progress)
+                    status_text.text(f"Epoch {epoch+1}/{epochs} - Loss: {logs['loss']:.4f} - Acc: {logs['accuracy']:.4f} - Val Loss: {logs['val_loss']:.4f} - Val Acc: {logs['val_accuracy']:.4f}")
+            
+            # Training
+            history = model.fit(
+                X_train, y_train,
+                epochs=epochs,
+                batch_size=32,
+                validation_data=(X_test, y_test),
+                verbose=0,
+                callbacks=[StreamlitCallback()]
+            )
+            
+            progress_bar.empty()
+            status_text.empty()
+        
+        st.success("✅ Training selesai!")
+        
+        # Plot Training History
+        st.subheader("📈 Training History")
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Loss Plot
+        ax1.plot(history.history['loss'], label='Training Loss', linewidth=2)
+        ax1.plot(history.history['val_loss'], label='Validation Loss', linewidth=2)
+        ax1.set_title('Model Loss', fontsize=14, fontweight='bold')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Accuracy Plot
+        ax2.plot(history.history['accuracy'], label='Training Accuracy', linewidth=2)
+        ax2.plot(history.history['val_accuracy'], label='Validation Accuracy', linewidth=2)
+        ax2.set_title('Model Accuracy', fontsize=14, fontweight='bold')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        st.markdown("---")
+        
+        # EVALUASI MODEL
+        st.subheader("5️⃣ Evaluasi Model")
+        
+        # Prediksi
+        y_pred_proba = model.predict(X_test, verbose=0)
+        
+        if num_classes == 2:
+            y_pred = (y_pred_proba > 0.5).astype(int).flatten()
+        else:
+            y_pred = np.argmax(y_pred_proba, axis=1)
+        
+        # Metrics
+        accuracy = accuracy_score(y_test, y_pred)
+        # Menggunakan average='binary' untuk 2 kelas (karena data dummy)
+        f1 = f1_score(y_test, y_pred, average='binary', pos_label=1) 
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("🎯 Accuracy", f"{accuracy:.4f}")
+        with col2:
+            st.metric("📊 F1-Score (Positive Class)", f"{f1:.4f}")
+        with col3:
+            final_loss = history.history['val_loss'][-1]
+            st.metric("📉 Validation Loss", f"{final_loss:.4f}")
+        
+        # Classification Report
+        st.write("**📋 Classification Report:**")
+        # Target names untuk data dummy: 0=Negative, 1=Positive
+        target_names = ['Negative (0)', 'Positive (1)']
+        report = classification_report(y_test, y_pred, target_names=target_names, output_dict=True)
+        df_report = pd.DataFrame(report).transpose()
+        st.dataframe(df_report.round(4), use_container_width=True)
+        
+        # Confusion Matrix
+        st.write("**🔀 Confusion Matrix:**")
+        cm = confusion_matrix(y_test, y_pred)
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        # Label untuk Confusion Matrix
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, 
+                    xticklabels=target_names, yticklabels=target_names)
+        ax.set_title('Confusion Matrix', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Predicted Label')
+        ax.set_ylabel('True Label')
+        st.pyplot(fig)
+        
+        # Simpan model ke session state
+        st.session_state.trained_model = model
+        st.session_state.tokenizer = tokenizer
+        st.session_state.max_len = max_len
+    
+    st.markdown("---")
 
 
 # --- FUNGSI ANALISIS LANJUTAN ---
@@ -267,27 +569,15 @@ def pos_tagging_analysis(list_dokumen_mentah):
     for idx, doc in enumerate(list_dokumen_mentah):
         with st.expander(f"📄 POS Tagging - Dokumen {idx+1}", expanded=(idx==0)):
             try:
-                # Tokenisasi dengan error handling
-                try:
-                    tokens = word_tokenize(doc.lower())
-                except LookupError as e:
-                    st.error(f"❌ Error NLTK: {e}")
-                    st.warning("⚠️ Silakan klik 'Setup NLTK' di bagian atas untuk download data yang diperlukan.")
-                    st.info("💡 Atau jalankan di Python:\n```python\nimport nltk\nnltk.download('punkt')\nnltk.download('punkt_tab')\nnltk.download('averaged_perceptron_tagger')\n```")
-                    return
+                # Tokenisasi
+                tokens = word_tokenize(doc.lower())
                 
                 if not tokens:
                     st.warning("⚠️ Tidak ada token yang dihasilkan")
                     continue
                 
-                # POS Tagging dengan error handling
-                try:
-                    pos_tags = pos_tag(tokens)
-                except LookupError as e:
-                    st.error(f"❌ Error NLTK POS Tagger: {e}")
-                    st.warning("⚠️ Silakan download data NLTK yang diperlukan.")
-                    st.info("💡 Jalankan:\n```python\nimport nltk\nnltk.download('averaged_perceptron_tagger')\nnltk.download('averaged_perceptron_tagger_eng')\n```")
-                    return
+                # POS Tagging
+                pos_tags = pos_tag(tokens)
                 
                 # Tampilkan dalam tabel
                 df_pos = pd.DataFrame(pos_tags, columns=['Word', 'POS Tag'])
@@ -299,28 +589,27 @@ def pos_tagging_analysis(list_dokumen_mentah):
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    st.write("**Distribusi POS Tags:**")
-                    st.bar_chart(pos_counts)
+                    st.write("**Distribusi Top 10 POS Tags:**")
+                    st.bar_chart(pos_counts.head(10))
                 
                 with col2:
-                    st.write("**Top POS Tags:**")
+                    st.write("**Top 5 POS Tags:**")
                     for pos, count in pos_counts.head(5).items():
                         st.metric(pos, count)
                 
                 # Penjelasan minimal 3 POS Tag menarik
-                st.write("**📚 Penjelasan POS Tags yang Menarik:**")
+                st.write("**📚 Penjelasan POS Tags yang Menarik (dari NLTK):**")
                 
                 pos_explanations = {
-                    'NN': '**NN (Noun)**: Kata benda tunggal, contoh: rumah, buku',
-                    'NNS': '**NNS (Noun Plural)**: Kata benda jamak, contoh: rumah-rumah',
-                    'VB': '**VB (Verb)**: Kata kerja bentuk dasar, contoh: makan, pergi',
-                    'VBD': '**VBD (Verb Past)**: Kata kerja bentuk lampau, contoh: ate, went',
-                    'VBG': '**VBG (Verb Gerund)**: Kata kerja bentuk -ing, contoh: eating, going',
-                    'JJ': '**JJ (Adjective)**: Kata sifat, contoh: bagus, besar',
-                    'RB': '**RB (Adverb)**: Kata keterangan, contoh: sangat, cepat',
-                    'PRP': '**PRP (Pronoun)**: Kata ganti, contoh: saya, dia, kami',
-                    'DT': '**DT (Determiner)**: Kata penentu, contoh: the, a, an',
-                    'IN': '**IN (Preposition)**: Kata depan, contoh: di, pada, dari'
+                    'NN': '**NN (Noun, singular)**: Kata benda tunggal (ex: table, car)',
+                    'NNS': '**NNS (Noun, plural)**: Kata benda jamak (ex: tables, cars)',
+                    'VB': '**VB (Verb, base form)**: Kata kerja bentuk dasar (ex: eat, go)',
+                    'VBD': '**VBD (Verb, past tense)**: Kata kerja bentuk lampau (ex: ate, went)',
+                    'JJ': '**JJ (Adjective)**: Kata sifat (ex: good, big)',
+                    'RB': '**RB (Adverb)**: Kata keterangan (ex: very, quickly)',
+                    'PRP': '**PRP (Personal Pronoun)**: Kata ganti personal (ex: I, he, she)',
+                    'DT': '**DT (Determiner)**: Kata penentu (ex: the, a, an)',
+                    'IN': '**IN (Preposition/subordinating conjunction)**: Kata depan (ex: in, of, on)'
                 }
                 
                 explained_tags = []
@@ -329,12 +618,9 @@ def pos_tagging_analysis(list_dokumen_mentah):
                         st.markdown(f"- {pos_explanations[pos]}")
                         explained_tags.append(pos)
                 
-                # Tambahkan penjelasan umum jika kurang dari 3
-                if len(explained_tags) < 3:
-                    remaining = [k for k in list(pos_explanations.keys())[:3] if k not in explained_tags]
-                    for pos in remaining[:3-len(explained_tags)]:
-                        st.markdown(f"- {pos_explanations[pos]}")
-                
+            except LookupError as e:
+                st.error(f"❌ Error NLTK: {e}")
+                st.warning("⚠️ Pastikan data NLTK **'punkt'** dan **'averaged\_perceptron\_tagger'** sudah didownload.")
             except Exception as e:
                 st.error(f"❌ Error POS Tagging: {e}")
 
@@ -342,7 +628,7 @@ def pos_tagging_analysis(list_dokumen_mentah):
 def named_entity_recognition(list_dokumen_mentah):
     """B - Named Entity Recognition: Identifikasi entitas bernama"""
     st.header("🎯 B - NAMED ENTITY RECOGNITION (NER)")
-    st.info("💡 **NER** mengidentifikasi dan mengklasifikasikan entitas bernama seperti nama orang, lokasi, organisasi, tanggal, dll.")
+    st.info("💡 **NER** mengidentifikasi dan mengklasifikasikan entitas bernama seperti nama orang, lokasi, organisasi, tanggal, dll. ")
     
     for idx, doc in enumerate(list_dokumen_mentah):
         with st.expander(f"📄 NER - Dokumen {idx+1}", expanded=(idx==0)):
@@ -352,7 +638,8 @@ def named_entity_recognition(list_dokumen_mentah):
                 pos_tags = pos_tag(tokens)
                 
                 # Named Entity Recognition
-                named_entities = ne_chunk(pos_tags, binary=False)
+                # binary=False menggunakan semua tipe NE (PERSON, GPE, ORGANIZATION, dll)
+                named_entities = ne_chunk(pos_tags, binary=False) 
                 
                 # Ekstrak entitas
                 entities_dict = {
@@ -360,12 +647,15 @@ def named_entity_recognition(list_dokumen_mentah):
                     'LOCATION': [],
                     'ORGANIZATION': [],
                     'DATE': [],
-                    'GPE': [],  # Geopolitical Entity
+                    'TIME': [],
+                    'MONEY': [],
+                    'GPE': [],  # Geopolitical Entity (Country, City, State)
                     'OTHER': []
                 }
                 
                 for chunk in named_entities:
                     if hasattr(chunk, 'label'):
+                        # Gabungkan kata-kata dalam entitas
                         entity_text = ' '.join(c[0] for c in chunk)
                         entity_label = chunk.label()
                         
@@ -381,396 +671,304 @@ def named_entity_recognition(list_dokumen_mentah):
                 for category, entities in entities_dict.items():
                     if entities:
                         found_entities = True
-                        with st.container():
-                            st.write(f"**{category}:**")
+                        with st.container(border=True):
+                            st.subheader(category)
                             # Hapus duplikat
-                            unique_entities = list(set(entities))
-                            for entity in unique_entities:
-                                st.write(f"  • {entity}")
+                            unique_entities = sorted(list(set(entities)))
+                            st.markdown("- " + "\n- ".join(unique_entities))
                 
                 if not found_entities:
                     st.warning("⚠️ Tidak ada entitas bernama yang ditemukan dalam dokumen ini.")
                     st.info("💡 Tip: Pastikan teks mengandung nama orang, tempat, atau organisasi dalam bahasa Inggris untuk deteksi optimal.")
                 
+                st.markdown("---")
+                
                 # Penjelasan Kategori
                 st.write("**📚 Penjelasan Kategori Entitas:**")
                 st.markdown("""
-                - **PERSON**: Nama orang (contoh: John Doe, Barack Obama)
-                - **LOCATION**: Nama tempat geografis (contoh: Mount Everest, Pacific Ocean)
-                - **ORGANIZATION**: Nama organisasi/perusahaan (contoh: Google, United Nations)
-                - **DATE**: Tanggal dan waktu (contoh: Monday, January 1st, 2024)
-                - **GPE**: Entitas geopolitik seperti negara, kota (contoh: Indonesia, Jakarta)
+                - **PERSON**: Nama orang (contoh: John Doe)
+                - **GPE**: Entitas Geopolitical (contoh: Indonesia, Jakarta)
+                - **ORGANIZATION**: Organisasi, perusahaan (contoh: Google, UN)
+                - **LOCATION**: Lokasi geografis non-GPE (contoh: Mount Everest, Pacific Ocean)
+                - **DATE/TIME**: Ekspresi temporal (contoh: 2023, yesterday)
+                - **MONEY**: Nilai mata uang
                 """)
+
+                # Tampilkan Struktur Pohon (Visualisasi NER)
+                st.write("**🌳 Struktur Pohon NER (Chunked Tree):**")
                 
-                # Visualisasi distribusi entitas
-                entity_counts = {k: len(set(v)) for k, v in entities_dict.items() if v}
-                if entity_counts:
-                    st.write("**📊 Distribusi Entitas:**")
-                    df_entities = pd.DataFrame(list(entity_counts.items()), 
-                                              columns=['Kategori', 'Jumlah'])
-                    st.bar_chart(df_entities.set_index('Kategori'))
+                # Fungsi untuk menampilkan tree (menggunakan representasi string)
+                def tree_to_string(tree):
+                    # Menggunakan metode str() bawaan Tree
+                    return str(tree)
                 
+                tree_string = tree_to_string(named_entities)
+                # Tampilkan 20 baris pertama
+                st.code('\n'.join(tree_string.splitlines()[:20]), language="text")
+
+                st.info("💡 **Penjelasan Struktur Pohon:** Entitas bernama dikelompokkan (chunking) dan diberi label di atas kata-kata yang membentuknya.")
+                
+            except LookupError as e:
+                st.error(f"❌ Error NLTK NER: {e}")
+                st.warning("⚠️ Pastikan data NLTK **'maxent_ne_chunker'** dan **'words'** sudah didownload.")
             except Exception as e:
                 st.error(f"❌ Error NER: {e}")
 
 
-def parsing_analysis(list_dokumen_mentah):
-    """C - Constituency dan Dependency Parsing"""
-    st.header("🌳 C - CONSTITUENCY & DEPENDENCY PARSING")
-    st.info("💡 **Parsing** menganalisis struktur gramatikal kalimat")
-    
-    for idx, doc in enumerate(list_dokumen_mentah):
-        with st.expander(f"📄 Parsing - Dokumen {idx+1}", expanded=(idx==0)):
-            try:
-                # Ambil beberapa kalimat pertama untuk analisis
-                sentences = doc.split('.')[:3]  # Ambil 3 kalimat pertama
-                
-                for sent_idx, sentence in enumerate(sentences):
-                    if len(sentence.strip()) < 5:
-                        continue
-                        
-                    st.write(f"**Kalimat {sent_idx+1}:** _{sentence.strip()}_")
-                    
-                    # Tokenisasi dan POS Tagging
-                    tokens = word_tokenize(sentence.strip())
-                    pos_tags = pos_tag(tokens)
-                    
-                    # === DEPENDENCY PARSING ===
-                    st.write("**🔗 Dependency Parsing** (Relasi antar kata):")
-                    
-                    # Buat tabel relasi sederhana
-                    df_dep = pd.DataFrame(pos_tags, columns=['Kata', 'POS'])
-                    df_dep['Index'] = range(len(df_dep))
-                    df_dep['Head'] = '-'
-                    df_dep['Relasi'] = 'ROOT' if len(df_dep) > 0 else '-'
-                    
-                    # Simulasi dependency sederhana berdasarkan POS
-                    for i in range(len(df_dep)):
-                        if i > 0:
-                            current_pos = df_dep.loc[i, 'POS']
-                            # Aturan sederhana
-                            if current_pos.startswith('V'):  # Verb
-                                df_dep.loc[i, 'Relasi'] = 'ROOT'
-                                df_dep.loc[i, 'Head'] = 0
-                            elif current_pos.startswith('N'):  # Noun
-                                df_dep.loc[i, 'Relasi'] = 'nsubj' if i < len(df_dep)//2 else 'obj'
-                                # Cari verb terdekat
-                                for j in range(len(df_dep)):
-                                    if df_dep.loc[j, 'POS'].startswith('V'):
-                                        df_dep.loc[i, 'Head'] = j
-                                        break
-                            elif current_pos.startswith('J'):  # Adjective
-                                df_dep.loc[i, 'Relasi'] = 'amod'
-                                if i > 0:
-                                    df_dep.loc[i, 'Head'] = i - 1
-                            elif current_pos.startswith('R'):  # Adverb
-                                df_dep.loc[i, 'Relasi'] = 'advmod'
-                                if i > 0:
-                                    df_dep.loc[i, 'Head'] = i - 1
-                    
-                    st.dataframe(df_dep[['Index', 'Kata', 'POS', 'Head', 'Relasi']], 
-                               use_container_width=True)
-                    
-                    st.caption("📝 Relasi: nsubj=subjek, obj=objek, amod=modifier kata sifat, advmod=modifier kata keterangan")
-                    
-                    # === CONSTITUENCY PARSING ===
-                    st.write("**🌲 Constituency Parsing** (Pohon Struktur Frasa):")
-                    
-                    # Named Entity Chunking sebagai proxy untuk constituency
-                    chunked = ne_chunk(pos_tags, binary=True)
-                    
-                    # Tampilkan tree structure
-                    tree_str = str(chunked)
-                    st.code(tree_str, language="lisp")
-                    
-                    # Penjelasan struktur
-                    st.markdown("""
-                    **Penjelasan Struktur:**
-                    - **S**: Sentence (Kalimat)
-                    - **NP**: Noun Phrase (Frasa Nomina)
-                    - **VP**: Verb Phrase (Frasa Verba)
-                    - **PP**: Prepositional Phrase (Frasa Preposisi)
-                    """)
-                    
-                    st.divider()
-                
-                st.success("✅ Parsing selesai!")
-                
-            except Exception as e:
-                st.error(f"❌ Error Parsing: {e}")
+# --- FUNGSI UTAMA UNTUK MEMBACA DOKUMEN ---
+@st.cache_data
+def read_uploaded_file(uploaded_file):
+    """Membaca isi dari file yang diupload (txt, docx, pdf)"""
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+    text_content = ""
 
-
-# --- HANDLER INPUT ---
-def handle_url(url):
-    """Ekstrak teks dari URL menggunakan BeautifulSoup"""
-    st.info(f"🌐 Mengunduh artikel dari: {url}")
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        paragraphs = soup.find_all(['p', 'article', 'div'])
-        text_list = []
-        
-        for para in paragraphs:
-            text = para.get_text(strip=True)
-            if len(text) > 50:
-                text_list.append(text)
-        
-        full_text = '\n'.join(text_list)
-        
-        if len(full_text) < 100:
-            st.warning("⚠️ Teks yang diekstrak terlalu pendek.")
-            return ""
-        
-        return full_text
-        
-    except Exception as e:
-        st.error(f"❌ Gagal mengambil artikel: {e}")
-        return ""
-
-def handle_audio(file_path):
-    """Transkripsi audio ke teks"""
-    if not SPEECH_RECOGNITION_AVAILABLE:
-        st.error("❌ SpeechRecognition tidak terinstall.")
-        st.info("💡 Untuk menggunakan fitur audio, install dengan:\n```bash\npip install SpeechRecognition\n```")
-        return ""
-    
-    st.info(f"🎤 Mentranskripsi file audio...")
-    recognizer = sr.Recognizer()
-    try:
-        with sr.AudioFile(file_path) as source:
-            audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data, language="id-ID")
-            return text
-    except Exception as e:
-        st.error(f"❌ Gagal transkripsi audio: {e}")
-        return ""
-
-def handle_doc(file_path, file_extension):
-    """Ekstrak teks dari dokumen"""
-    text = ""
-    try:
-        if file_extension == '.txt':
-            st.info("📄 Membaca file TXT...")
-            with open(file_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-                
-        elif file_extension == '.pdf':
-            st.info("📕 Membaca file PDF...")
-            with pdfplumber.open(file_path) as pdf:
-                all_pages_text = [p.extract_text() for p in pdf.pages if p.extract_text()]
-                text = "\n".join(all_pages_text)
-                
-        elif file_extension == '.docx':
-            st.info("📘 Membaca file DOCX...")
-            doc = docx.Document(file_path)
-            all_paras_text = [para.text for para in doc.paragraphs]
-            text = "\n".join(all_paras_text)
+        if file_extension == 'txt':
+            text_content = uploaded_file.getvalue().decode("utf-8")
+        elif file_extension == 'docx':
+            doc = docx.Document(uploaded_file)
+            paragraphs = [p.text for p in doc.paragraphs]
+            text_content = '\n'.join(paragraphs)
+        elif file_extension == 'pdf':
+            # Menggunakan tempfile untuk memastikan pdfplumber bisa mengakses file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
             
-    except Exception as e:
-        st.error(f"❌ Error membaca file: {e}")
+            try:
+                with pdfplumber.open(tmp_path) as pdf:
+                    for page in pdf.pages:
+                        text_content += page.extract_text() if page.extract_text() else ""
+            finally:
+                os.remove(tmp_path) # Pastikan file temporary dihapus
+        else:
+            return None
+            
+        return text_content
         
-    return text
-
-def save_uploaded_file(uploaded_file):
-    """Simpan file upload ke temporary directory"""
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            return tmp_file.name
     except Exception as e:
-        st.error(f"❌ Gagal menyimpan file: {e}")
+        st.error(f"❌ Gagal membaca file: {e}")
         return None
 
 
-# --- APLIKASI UTAMA ---
-if 'dokumen_mentah_list' not in st.session_state:
-    st.session_state.dokumen_mentah_list = []
-
-st.title("🚀 Program Analisis Teks NLP")
-st.markdown("""
-**Aplikasi ini melakukan:**
-- 🔄 Preprocessing (Case Folding, Tokenizing, Stopword Removal, Stemming)
-- 🏷️ POS Tagging (Part-of-Speech Tagging)
-- 🎯 Named Entity Recognition (NER)
-- 🌳 Constituency & Dependency Parsing
-- 📊 Representasi Teks (Bag of Words, TF-IDF, Word2Vec)
-- 📁 Mendukung berbagai input: URL, PDF, DOCX, TXT, Audio
-""")
-
-# Tombol untuk download NLTK data secara manual
-with st.expander("⚙️ Setup NLTK (Klik jika ada error NLTK)"):
-    st.write("Jika mengalami error NLTK, klik tombol di bawah untuk download data:")
-    if st.button("📥 Download NLTK Data"):
-        with st.spinner("Downloading NLTK data..."):
-            try:
-                nltk.download('all', quiet=False)
-                st.success("✅ NLTK data berhasil didownload!")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-                st.info("💡 Alternatif: Jalankan di terminal:\n```python\nimport nltk\nnltk.download('all')\n```")
-
-st.divider()
-
-# SIDEBAR
-st.sidebar.header("📥 Input Data")
-
-# INPUT URL
-with st.sidebar.expander("🌐 Dari URL"):
-    url_input = st.text_input("Masukkan URL artikel")
-    if st.button("Proses URL", key="btn_url"):
-        if url_input:
-            with st.spinner("Memproses URL..."):
-                teks_mentah = handle_url(url_input)
-                if teks_mentah:
-                    st.session_state.dokumen_mentah_list.append(teks_mentah)
-                    st.success(f"✅ URL berhasil! Total: {len(st.session_state.dokumen_mentah_list)}")
-        else:
-            st.warning("⚠️ Harap masukkan URL.")
-
-# INPUT FILE
-with st.sidebar.expander("📁 Dari File"):
-    # Tentukan file types yang didukung
-    file_types = ["pdf", "docx", "txt"]
-    if SPEECH_RECOGNITION_AVAILABLE:
-        file_types.extend(["wav", "mp3"])
-    
-    uploaded_file = st.file_uploader(
-        "Pilih file", 
-        type=file_types
+# --- FUNGSI UTAMA APLIKASI STREAMLIT ---
+def main_app():
+    """Fungsi utama untuk menjalankan aplikasi Streamlit"""
+    st.set_page_config(
+        page_title="NLP Toolkit: Representasi & Deep Learning",
+        layout="wide",
+        initial_sidebar_state="expanded"
     )
     
-    # Tampilkan info jika audio tidak tersedia
-    if not SPEECH_RECOGNITION_AVAILABLE:
-        st.warning("⚠️ Fitur audio tidak tersedia (SpeechRecognition belum terinstall)")
-    
-    if uploaded_file is not None:
-        st.info(f"📄 File: {uploaded_file.name}")
+    st.title("🤖 NLP TOOLKIT: Representasi Teks & Deep Learning")
+    st.markdown("Aplikasi demonstrasi untuk preprocessing, representasi teks (BoW, TF-IDF, Word2Vec), klasifikasi Deep Learning (RNN/LSTM), dan analisis lanjutan (POS Tagging, NER).")
+
+    # --- SIDEBAR INPUT ---
+    with st.sidebar:
+        st.header("⚙️ Konfigurasi Input")
         
-        if st.button("Proses File", key="btn_file"):
-            with st.spinner(f"Memproses {uploaded_file.name}..."):
-                file_path = save_uploaded_file(uploaded_file)
-                
-                if file_path:
-                    try:
-                        _, file_extension = os.path.splitext(file_path)
-                        file_extension = file_extension.lower()
-                        teks_mentah = ""
-
-                        if file_extension in ['.wav', '.mp3']:
-                            teks_mentah = handle_audio(file_path)
-                        elif file_extension in ['.pdf', '.docx', '.txt']:
-                            teks_mentah = handle_doc(file_path, file_extension)
-                        else:
-                            st.error(f"❌ Format file {file_extension} tidak didukung.")
-
-                        if teks_mentah:
-                            st.session_state.dokumen_mentah_list.append(teks_mentah)
-                            st.success(f"✅ File berhasil diproses! Total: {len(st.session_state.dokumen_mentah_list)}")
-                        else:
-                            st.warning("⚠️ Gagal mengekstrak teks dari file.")
-                            
-                    except Exception as e:
-                        st.error(f"❌ Error saat memproses file: {e}")
-                    finally:
-                        # Selalu hapus file sementara
-                        if os.path.exists(file_path):
-                            os.remove(file_path)
-
-# INPUT TEKS MANUAL
-with st.sidebar.expander("✍️ Dari Teks Manual"):
-    manual_text = st.text_area("Masukkan teks di sini")
-    if st.button("Proses Teks", key="btn_text"):
-        if manual_text.strip():
-            st.session_state.dokumen_mentah_list.append(manual_text.strip())
-            st.success(f"✅ Teks berhasil ditambahkan! Total: {len(st.session_state.dokumen_mentah_list)}")
-        else:
-            st.warning("⚠️ Harap masukkan teks.")
-
-st.sidebar.divider()
-
-# KONTROL ANALISIS
-st.sidebar.header("⚙️ Kontrol Analisis")
-run_button = st.sidebar.button("🚀 Jalankan Analisis NLP", type="primary", use_container_width=True)
-
-if st.sidebar.button("🗑️ Bersihkan Semua Data", use_container_width=True):
-    st.session_state.dokumen_mentah_list = []
-    st.success("✅ Semua data telah dibersihkan!")
-    st.rerun()
-
-st.divider()
-
-# --- PANEL UTAMA (MAIN PANEL) ---
-
-# Cek jika ada data untuk diproses
-if not st.session_state.dokumen_mentah_list:
-    st.info("👋 Selamat datang! Silakan masukkan data melalui sidebar (URL, File, atau Teks) untuk memulai analisis.")
-    st.stop()
-
-# Tampilkan dokumen mentah yang sudah diinput
-st.header("1. 📜 Teks Mentah (Input)")
-for i, doc in enumerate(st.session_state.dokumen_mentah_list):
-    with st.expander(f"Dokumen {i+1} - {doc[:60]}..."):
-        st.text_area(f"Teks Dokumen {i+1}", doc, height=200, key=f"raw_doc_{i}")
-
-# Jika tombol "Jalankan Analisis" ditekan
-if run_button:
-    
-    # 2. PREPROCESSING
-    st.header("2. ⚙️ Proses Preprocessing")
-    st.write("Teks dibersihkan (case folding, cleaning, stopword removal, stemming) untuk analisis Representasi Teks.")
-    
-    list_dokumen_bersih = []
-    
-    for i, doc_mentah in enumerate(st.session_state.dokumen_mentah_list):
-        st.subheader(f"Dokumen {i+1}")
-        with st.spinner(f"Memproses Dokumen {i+1}..."):
-            hasil_bersih = preprocess_text(doc_mentah)
+        # Pilihan Input Teks
+        input_type = st.radio(
+            "Pilih Tipe Input:",
+            ("Input Manual", "Upload File", "Web Scraping"),
+            index=0
+        )
+        
+        list_dokumen_mentah = []
+        
+        if input_type == "Input Manual":
+            st.subheader("📝 Input Teks Manual")
+            manual_text = st.text_area(
+                "Masukkan satu atau lebih dokumen (pisahkan dengan baris baru ganda, gunakan bahasa Inggris untuk hasil NER/POS optimal):",
+                "Jakarta is the capital city of Indonesia. I love this city.\n\n"
+                "Natural Language Processing (NLP) is a field of artificial intelligence."
+            )
+            if manual_text:
+                # Pisahkan dokumen berdasarkan baris baru ganda
+                list_dokumen_mentah = [doc.strip() for doc in manual_text.split('\n\n') if doc.strip()]
+        
+        elif input_type == "Upload File":
+            st.subheader("📁 Upload Dokumen")
+            uploaded_file = st.file_uploader(
+                "Upload file (.txt, .docx, .pdf)",
+                type=["txt", "docx", "pdf"],
+                accept_multiple_files=True
+            )
             
-            if hasil_bersih:
-                list_dokumen_bersih.append(hasil_bersih)
-                st.text_area("Hasil Preprocessing:", hasil_bersih, height=100, key=f"clean_doc_{i}")
+            if uploaded_file:
+                for file in uploaded_file:
+                    content = read_uploaded_file(file)
+                    if content:
+                        list_dokumen_mentah.append(content)
+                if list_dokumen_mentah:
+                    st.success(f"✅ Berhasil membaca {len(list_dokumen_mentah)} dokumen.")
+
+        elif input_type == "Web Scraping":
+            st.subheader("🔗 Web Scraping")
+            url = st.text_input("Masukkan URL (Contoh: https://en.wikipedia.org/wiki/NLP):", 
+                                "https://en.wikipedia.org/wiki/Natural_language_processing")
+            
+            if st.button("Scrape Konten"):
+                if url:
+                    try:
+                        st.info(f"🔄 Mengambil konten dari: **{url}**")
+                        response = requests.get(url, timeout=10)
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        # Ekstrak semua teks dari tag <p>
+                        paragraphs = soup.find_all('p')
+                        scraped_text = '\n'.join([p.get_text() for p in paragraphs])
+                        
+                        if not scraped_text.strip():
+                            st.warning("⚠️ Tidak ada konten paragraf yang ditemukan.")
+                        else:
+                            # Anggap seluruh konten sebagai satu dokumen
+                            list_dokumen_mentah.append(scraped_text)
+                            st.session_state.list_dokumen_mentah_new = list_dokumen_mentah # Trigger update
+                            st.success("✅ Web Scraping selesai.")
+                            st.text_area("Konten yang di-Scrape (Snippet):", scraped_text[:1000] + "...", height=200)
+
+                    except requests.exceptions.Timeout:
+                        st.error("❌ Timeout: Permintaan melebihi batas waktu.")
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"❌ Gagal koneksi ke URL: {e}")
+                    except Exception as e:
+                        st.error(f"❌ Gagal melakukan web scraping: {e}")
+        
+        # Load dokumen mentah dari session state jika ada
+        if 'list_dokumen_mentah_new' in st.session_state and input_type != "Web Scraping":
+            list_dokumen_mentah = st.session_state.list_dokumen_mentah_new
+        
+        # Simpan kembali ke session state untuk dibaca tab lain
+        st.session_state.list_dokumen_mentah = list_dokumen_mentah
+
+        st.markdown("---")
+        st.subheader("🗂️ Status Dokumen")
+        st.metric("Jumlah Dokumen Mentah", len(list_dokumen_mentah))
+        
+        if len(list_dokumen_mentah) == 0:
+            st.warning("Mohon masukkan dokumen untuk memulai analisis.")
+
+
+    # --- TABS UTAMA ---
+    tab_preprocess, tab_repr, tab_dl, tab_advanced = st.tabs([
+        "1. Preprocessing", 
+        "2. Representasi Teks", 
+        "3. Deep Learning (Klasifikasi)", 
+        "4. Analisis Lanjutan (POS/NER)"
+    ])
+
+    # --- TAB PREPROCESSING ---
+    with tab_preprocess:
+        st.header("1️⃣ PREPROCESSING DOKUMEN")
+        
+        if list_dokumen_mentah:
+            if st.button("✨ Mulai Preprocessing (Sastrawi)", type="primary"):
+                list_dokumen_bersih = []
+                with st.spinner("Memproses semua dokumen..."):
+                    for idx, doc in enumerate(list_dokumen_mentah):
+                        st.subheader(f"Dokumen {idx+1}")
+                        with st.expander("Lihat Teks Mentah", expanded=False):
+                            st.code(doc, language="markdown")
+                        
+                        # Jalankan preprocessing
+                        cleaned_doc = preprocess_text(doc)
+                        
+                        if cleaned_doc:
+                            list_dokumen_bersih.append(cleaned_doc)
+                            st.markdown("**Hasil Preprocessing (Bersih):**")
+                            st.code(cleaned_doc, language="text")
+                        
+                st.session_state.list_dokumen_bersih = list_dokumen_bersih
+                st.success("✅ Preprocessing Selesai untuk semua dokumen!")
             else:
-                st.warning("⚠️ Tidak ada hasil setelah preprocessing (mungkin teks terlalu pendek atau hanya berisi stopword).")
+                # Muat dari session state jika sudah diproses
+                if 'list_dokumen_bersih' not in st.session_state:
+                     st.session_state.list_dokumen_bersih = []
+                st.info("Klik tombol **'Mulai Preprocessing'** untuk memproses dokumen dan melanjutkan ke tab berikutnya.")
+        else:
+            st.warning("Input dokumen terlebih dahulu di sidebar.")
 
-    # Pastikan ada hasil bersih sebelum lanjut
-    if not list_dokumen_bersih:
-        st.error("❌ Tidak ada teks yang tersisa setelah preprocessing. Analisis dihentikan.")
-        st.stop()
+    # --- TAB REPRESENTASI TEKS ---
+    with tab_repr:
+        list_dokumen_bersih = st.session_state.get('list_dokumen_bersih', [])
+        if list_dokumen_bersih:
+            run_analysis(list_dokumen_bersih)
+        else:
+            st.warning("Lakukan Preprocessing terlebih dahulu di tab '1. Preprocessing'.")
 
-    st.success("✅ Semua dokumen berhasil di-preprocess!")
-    st.divider()
+    # --- TAB DEEP LEARNING ---
+    with tab_dl:
+        st.info("💡 **Catatan:** Klasifikasi Deep Learning membutuhkan data berlabel. Kami menggunakan **data dummy (sentimen positif/negatif)** untuk mendemonstrasikan proses training dan evaluasi.")
+        
+        # Tombol untuk menjalankan Deep Learning dengan data dummy
+        if st.button("▶️ Jalankan Deep Learning Demo (Data Dummy)", type="primary", key="dl_demo_button"):
+            dummy_texts, dummy_labels = generate_dummy_data()
+            deep_learning_classification(dummy_texts, dummy_labels)
+        
+        st.markdown("---")
+        st.subheader("Prediksi Teks Baru (Menggunakan Model Demo)")
+        
+        if 'trained_model' in st.session_state:
+            model = st.session_state.trained_model
+            tokenizer = st.session_state.tokenizer
+            max_len = st.session_state.max_len
+            
+            st.success("✅ Model Demo (Simple RNN/LSTM) sudah dilatih dan siap digunakan.")
+            
+            new_text_predict = st.text_area("Masukkan teks baru untuk diprediksi sentimennya (Contoh: I love this, it is bad):", 
+                                            "This service was disappointing, not worth the price.")
+            
+            if st.button("🔮 Prediksi Teks Baru", key="predict_new_text"):
+                if new_text_predict.strip():
+                    # Tokenize and Pad
+                    new_seq = tokenizer.texts_to_sequences([new_text_predict])
+                    new_padded = pad_sequences(new_seq, maxlen=max_len, padding='post', truncating='post')
+                    
+                    # Predict
+                    prediction = model.predict(new_padded, verbose=0)
+                    
+                    # Asumsi 2 kelas (karena data dummy)
+                    pred_label = int(prediction[0] > 0.5)
+                    confidence = float(prediction[0]) if pred_label == 1 else 1 - float(prediction[0])
+                    label_name = "Positive (1)" if pred_label == 1 else "Negative (0)"
+                    
+                    st.success(f"**Prediksi Sentimen:** {label_name}")
+                    st.info(f"**Confidence:** {confidence:.2%}")
+                    
+                    st.progress(confidence)
+                else:
+                    st.warning("⚠️ Masukkan teks terlebih dahulu!")
+            
+        else:
+            st.warning("Mohon jalankan **'Deep Learning Demo'** terlebih dahulu.")
 
-    # 3. ANALISIS NLP LANJUTAN (POS, NER, PARSING)
-    st.header("3. 🧠 Analisis NLP Lanjutan")
-    st.info("""
-    Analisis berikut (POS Tagging, NER, dan Parsing) dijalankan pada **teks mentah** (sebelum preprocessing) untuk menjaga struktur gramatikal dan entitas (seperti nama dan lokasi).
-    """)
+    # --- TAB ANALISIS LANJUTAN ---
+    with tab_advanced:
+        list_dokumen_mentah = st.session_state.get('list_dokumen_mentah', [])
+        
+        if not list_dokumen_mentah:
+            st.warning("Input dokumen terlebih dahulu di sidebar.")
+            return
+            
+        st.info("💡 **Catatan:** Analisis lanjutan (POS/NER) ini lebih efektif pada **teks mentah (belum di-stemming)** dan terutama didukung untuk **Bahasa Inggris** oleh library NLTK.")
+        
+        # POS Tagging
+        st.markdown("---")
+        pos_tagging_analysis(list_dokumen_mentah)
+        
+        # Named Entity Recognition
+        st.markdown("---")
+        named_entity_recognition(list_dokumen_mentah)
+
+
+# --- RUN APP ---
+if __name__ == '__main__':
+    # Inisialisasi session state
+    if 'list_dokumen_bersih' not in st.session_state:
+        st.session_state.list_dokumen_bersih = []
+    if 'list_dokumen_mentah' not in st.session_state:
+        st.session_state.list_dokumen_mentah = []
     
-    # Panggil fungsi analisis lanjutan
-    pos_tagging_analysis(st.session_state.dokumen_mentah_list)
-    st.divider()
-    named_entity_recognition(st.session_state.dokumen_mentah_list)
-    st.divider()
-    parsing_analysis(st.session_state.dokumen_mentah_list)
-    st.divider()
-
-    # 4. ANALISIS REPRESENTASI TEKS (BoW, TF-IDF, W2V)
-    st.info("""
-    Analisis Representasi Teks (BoW, TF-IDF, Word2Vec) dijalankan pada **teks bersih** (setelah preprocessing) untuk mendapatkan fitur kata yang relevan.
-    """)
-    
-    # Panggil fungsi representasi teks
-    run_analysis(list_dokumen_bersih)
-
-    st.balloons()
-    st.success("🎉 Analisis Selesai!")
+    # Run main application
+    main_app()
