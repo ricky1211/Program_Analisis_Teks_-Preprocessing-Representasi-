@@ -10,3 +10,7 @@ requests
 beautifulsoup4
 nltk
 SpeechRecognition
+tensorflow
+keras
+matplotlib
+seaborn
