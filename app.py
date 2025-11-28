@@ -63,7 +63,33 @@ def download_nltk_data():
     
     for package in nltk_packages:
         try:
+            # Cek di path standard NLTK
             nltk.data.find(f'tokenizers/{package}')
+        except LookupError:
+            try:
+                # Coba download jika tidak ada
+                nltk.download(package, quiet=True)
+            except Exception:
+                pass
+        
+        try:
+            nltk.data.find(f'taggers/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except Exception:
+                pass
+        
+        try:
+            nltk.data.find(f'chunkers/{package}')
+        except LookupError:
+            try:
+                nltk.download(package, quiet=True)
+            except Exception:
+                pass
+        
+        try:
+            nltk.data.find(f'corpora/{package}')
         except LookupError:
             try:
                 nltk.download(package, quiet=True)
@@ -762,6 +788,8 @@ def main_app():
         if input_type != st.session_state.get('last_input_type', 'Input Manual'):
              list_dokumen_mentah = []
              st.session_state.list_dokumen_mentah = []
+             # Juga reset dokumen bersih jika input berubah
+             st.session_state.list_dokumen_bersih = [] 
         
         st.session_state.last_input_type = input_type
 
@@ -799,6 +827,7 @@ def main_app():
 
         elif input_type == "Load CSV Data":
             st.subheader("📊 Load CSV Data (Hasil Crawling)")
+            st.info("💡 **Gunakan opsi ini untuk memuat `data_tweet.csv` hasil crawling dari Google Colab/X.**")
             uploaded_csv = st.file_uploader(
                 "Upload file CSV (misalnya: data_tweet.csv)",
                 type=["csv"],
@@ -816,9 +845,10 @@ def main_app():
                     # Pilihan kolom teks (sesuai modul, kolom tweet adalah 'full_text')
                     default_index = df.columns.get_loc('full_text') if 'full_text' in df.columns else 0
                     text_column = st.selectbox(
-                        "Pilih Kolom Teks untuk Analisis:",
+                        "Pilih Kolom Teks untuk Analisis (Kolom Tweet/X):",
                         options=df.columns.tolist(),
-                        index=default_index
+                        index=default_index,
+                        key="csv_text_column_select"
                     )
                     
                     if st.button("Proses Data dari Kolom CSV"):
@@ -827,11 +857,11 @@ def main_app():
                         
                         if list_dokumen_mentah:
                             st.success(f"✅ {len(list_dokumen_mentah)} teks berhasil diekstrak dari kolom **'{text_column}'**.")
+                            # Simpan ke session state
+                            st.session_state.list_dokumen_mentah = list_dokumen_mentah
+                            st.session_state.list_dokumen_bersih = []
                         else:
                             st.error("❌ Tidak ada data teks yang valid di kolom terpilih.")
-                            
-                        # Hapus dokumen bersih sebelumnya jika input baru
-                        st.session_state.list_dokumen_bersih = []
                 
                 except Exception as e:
                     st.error(f"❌ Gagal membaca file CSV atau kolom: {e}")
@@ -859,6 +889,8 @@ def main_app():
                         else:
                             # Anggap seluruh konten sebagai satu dokumen
                             list_dokumen_mentah = [scraped_text]
+                            st.session_state.list_dokumen_mentah = list_dokumen_mentah
+                            st.session_state.list_dokumen_bersih = []
                             st.success("✅ Web Scraping selesai.")
                             st.text_area("Konten yang di-Scrape (Snippet):", scraped_text[:1000] + "...", height=200)
 
@@ -873,14 +905,15 @@ def main_app():
                         list_dokumen_mentah = []
 
         
-        # Simpan kembali ke session state untuk dibaca tab lain
-        st.session_state.list_dokumen_mentah = list_dokumen_mentah
+        # Simpan kembali list_dokumen_mentah dari input manual/file ke session state
+        if input_type == "Input Manual" or input_type == "Upload File":
+             st.session_state.list_dokumen_mentah = list_dokumen_mentah
 
         st.markdown("---")
         st.subheader("🗂️ Status Dokumen")
-        st.metric("Jumlah Dokumen Mentah", len(list_dokumen_mentah))
+        st.metric("Jumlah Dokumen Mentah", len(st.session_state.list_dokumen_mentah))
         
-        if len(list_dokumen_mentah) == 0:
+        if len(st.session_state.list_dokumen_mentah) == 0:
             st.warning("Mohon masukkan dokumen untuk memulai analisis.")
 
 
@@ -895,12 +928,13 @@ def main_app():
     # --- TAB PREPROCESSING ---
     with tab_preprocess:
         st.header("1️⃣ PREPROCESSING DOKUMEN")
+        list_dokumen_mentah_current = st.session_state.get('list_dokumen_mentah', [])
         
-        if list_dokumen_mentah:
+        if list_dokumen_mentah_current:
             if st.button("✨ Mulai Preprocessing (Sastrawi)", type="primary"):
                 list_dokumen_bersih = []
                 with st.spinner("Memproses semua dokumen..."):
-                    for idx, doc in enumerate(list_dokumen_mentah):
+                    for idx, doc in enumerate(list_dokumen_mentah_current):
                         st.subheader(f"Dokumen {idx+1} (Panjang: {len(doc.split())} kata)")
                         with st.expander("Lihat Teks Mentah", expanded=False):
                             st.code(doc[:2000], language="markdown") # Batasi 2000 karakter
@@ -984,9 +1018,9 @@ def main_app():
 
     # --- TAB ANALISIS LANJUTAN ---
     with tab_advanced:
-        list_dokumen_mentah = st.session_state.get('list_dokumen_mentah', [])
+        list_dokumen_mentah_current = st.session_state.get('list_dokumen_mentah', [])
         
-        if not list_dokumen_mentah:
+        if not list_dokumen_mentah_current:
             st.warning("Input dokumen terlebih dahulu di sidebar.")
             return
             
@@ -994,11 +1028,11 @@ def main_app():
         
         # POS Tagging
         st.markdown("---")
-        pos_tagging_analysis(list_dokumen_mentah)
+        pos_tagging_analysis(list_dokumen_mentah_current)
         
         # Named Entity Recognition
         st.markdown("---")
-        named_entity_recognition(list_dokumen_mentah)
+        named_entity_recognition(list_dokumen_mentah_current)
 
 
 # --- RUN APP ---
