@@ -828,6 +828,23 @@ def main_app():
         elif input_type == "Load CSV Data":
             st.subheader("📊 Load CSV Data (Hasil Crawling)")
             st.info("💡 **Gunakan opsi ini untuk memuat `data_tweet.csv` hasil crawling dari Google Colab/X.**")
+            
+            # --- MODIFIKASI: INPUT AUTH TOKEN ---
+            auth_token_input = st.text_input(
+                "Masukkan X/Twitter Auth Token Anda (Opsional, diperlukan untuk crawling langsung):",
+                type="password",
+                key="auth_token_input"
+            )
+            if auth_token_input:
+                st.success("✅ Auth Token dimasukkan.")
+                # Anda dapat menyimpan token ini ke session state jika Anda mengimplementasikan crawling Python murni di masa depan
+                st.session_state.auth_token = auth_token_input 
+            else:
+                 if 'auth_token' in st.session_state:
+                     del st.session_state.auth_token
+
+            # --- AKHIR MODIFIKASI: INPUT AUTH TOKEN ---
+
             uploaded_csv = st.file_uploader(
                 "Upload file CSV (misalnya: data_tweet.csv)",
                 type=["csv"],
@@ -839,10 +856,8 @@ def main_app():
                     df = pd.read_csv(uploaded_csv)
                     st.success(f"✅ Berhasil memuat file CSV dengan {len(df)} baris dan {len(df.columns)} kolom.")
                     
-                    # Tampilkan 5 baris pertama
                     st.dataframe(df.head(5))
                     
-                    # Pilihan kolom teks (sesuai modul, kolom tweet adalah 'full_text')
                     default_index = df.columns.get_loc('full_text') if 'full_text' in df.columns else 0
                     text_column = st.selectbox(
                         "Pilih Kolom Teks untuk Analisis (Kolom Tweet/X):",
@@ -852,12 +867,10 @@ def main_app():
                     )
                     
                     if st.button("Proses Data dari Kolom CSV"):
-                        # Konversi kolom teks menjadi list dokumen mentah
                         list_dokumen_mentah = df[text_column].astype(str).dropna().tolist()
                         
                         if list_dokumen_mentah:
                             st.success(f"✅ {len(list_dokumen_mentah)} teks berhasil diekstrak dari kolom **'{text_column}'**.")
-                            # Simpan ke session state
                             st.session_state.list_dokumen_mentah = list_dokumen_mentah
                             st.session_state.list_dokumen_bersih = []
                         else:
