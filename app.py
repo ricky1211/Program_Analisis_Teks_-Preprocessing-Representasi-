@@ -4,9 +4,11 @@ import pandas as pd
 import numpy as np
 import os
 import tempfile
-
-# Web Framework
 import streamlit as st
+import requests
+from bs4 import BeautifulSoup
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Preprocessing
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
@@ -18,32 +20,27 @@ from gensim.models import Word2Vec
 
 # Document Processing
 import docx
-import pdfplumber
-
-# Web Scraping
-import requests
-from bs4 import BeautifulSoup
+# Gunakan try-except untuk pdfplumber karena mungkin tidak selalu terinstal
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
 # Deep Learning
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Bidirectional, SimpleRNN
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Optional: Speech Recognition
-SPEECH_RECOGNITION_AVAILABLE = False
+# Gunakan try-except untuk Tensorflow/Keras karena mungkin tidak selalu terinstal
 try:
-    import speech_recognition as sr
-    SPEECH_RECOGNITION_AVAILABLE = True
+    import tensorflow as tf
+    from tensorflow import keras
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Bidirectional, SimpleRNN
+    from tensorflow.keras.preprocessing.text import Tokenizer
+    from tensorflow.keras.preprocessing.sequence import pad_sequences
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
+    DEEP_LEARNING_AVAILABLE = True
 except ImportError:
-    pass
-
+    DEEP_LEARNING_AVAILABLE = False
+    
 # NLP Advanced
 import nltk
 from nltk import pos_tag
@@ -56,62 +53,34 @@ from nltk.chunk import ne_chunk
 @st.cache_resource
 def download_nltk_data():
     """Download semua data NLTK yang diperlukan"""
+    # Daftar paket NLTK yang diperlukan
     nltk_packages = [
         'punkt',
-        'punkt_tab',
         'averaged_perceptron_tagger',
-        'averaged_perceptron_tagger_eng',
         'maxent_ne_chunker',
-        'maxent_ne_chunker_tab',
         'words'
     ]
     
     for package in nltk_packages:
         try:
-            # Cek di path standard NLTK
             nltk.data.find(f'tokenizers/{package}')
         except LookupError:
             try:
-                # Coba download jika tidak ada
                 nltk.download(package, quiet=True)
-            except:
-                pass
-        
-        try:
-            nltk.data.find(f'taggers/{package}')
-        except LookupError:
-            try:
-                nltk.download(package, quiet=True)
-            except:
-                pass
-        
-        try:
-            nltk.data.find(f'chunkers/{package}')
-        except LookupError:
-            try:
-                nltk.download(package, quiet=True)
-            except:
-                pass
-        
-        try:
-            nltk.data.find(f'corpora/{package}')
-        except LookupError:
-            try:
-                nltk.download(package, quiet=True)
-            except:
+            except Exception:
                 pass
 
 # Download data NLTK
 try:
     download_nltk_data()
 except Exception as e:
-    st.warning(f"⚠️ Beberapa data NLTK gagal didownload: {e}")
+    st.warning(f"⚠️ Beberapa data NLTK gagal didownload atau dimuat: {e}")
 
 
-# --- INISIALISASI MODEL ---
+# --- INISIALISASI MODEL SASTRAWI ---
 @st.cache_resource
 def inisialisasi_model():
-    """Menginisialisasi model Sastrawi"""
+    """Menginisialisasi model Sastrawi (Stemmer & Stopword Remover)"""
     stemmer_factory = StemmerFactory()
     stemmer = stemmer_factory.create_stemmer()
     
@@ -124,8 +93,8 @@ try:
     stemmer, stopword_remover = inisialisasi_model()
 except Exception as e:
     st.error(f"❌ Gagal memuat model Sastrawi: {e}")
-    # Jika gagal, hentikan aplikasi (penting untuk preprocessing)
-    st.stop()
+    # Jika gagal, tampilkan pesan error tapi tidak menghentikan aplikasi
+    pass 
 
 
 # --- FUNGSI PREPROCESSING ---
@@ -151,6 +120,7 @@ def preprocess_text(text):
             return ""
         
         st.info("   🚫 Stopword removal...")
+        # Gabungkan tokens menjadi string sebelum stopword removal
         text_tanpa_stopword = stopword_remover.remove(' '.join(tokens))
         
         st.info("   🌱 Stemming...")
@@ -172,6 +142,11 @@ def run_analysis(list_dokumen_bersih):
     """Menganalisis dokumen dengan BoW, TF-IDF, dan Word2Vec"""
     st.header("📊 IMPLEMENTASI REPRESENTASI TEKS")
     st.markdown("---")
+
+    # Pastikan list dokumen tidak kosong
+    if not list_dokumen_bersih or not all(doc.strip() for doc in list_dokumen_bersih):
+        st.error("❌ Dokumen bersih kosong atau hanya berisi spasi. Cek hasil preprocessing.")
+        return
 
     # BAG OF WORDS
     st.subheader("1️⃣ Metode Bag of Words (BoW)")
@@ -216,9 +191,11 @@ def run_analysis(list_dokumen_bersih):
         st.dataframe(df_tfidf.round(4), use_container_width=True)
         st.info("💡 **Penjelasan:** Memberi bobot kata berdasarkan frekuensi (TF) dan kelangkaannya (IDF) di seluruh dokumen. Nilai yang lebih tinggi menandakan kata tersebut penting dan spesifik untuk dokumen tersebut.")
         
-        max_tfidf = df_tfidf.max().sort_values(ascending=False).head(5)
-        st.write("**Top 5 Kata Berdasarkan Bobot TF-IDF Tertinggi:**")
-        st.bar_chart(max_tfidf)
+        # Cek apakah ada fitur yang dihasilkan
+        if len(fitur_tfidf) > 0:
+            max_tfidf = df_tfidf.max().sort_values(ascending=False).head(5)
+            st.write("**Top 5 Kata Berdasarkan Bobot TF-IDF Tertinggi:**")
+            st.bar_chart(max_tfidf)
         
     except ValueError as e:
         st.error(f"❌ ERROR TF-IDF: {e}")
@@ -229,7 +206,7 @@ def run_analysis(list_dokumen_bersih):
     st.subheader("3️⃣ Metode Word2Vec")
     try:
         # Word2Vec membutuhkan list of list of tokens
-        tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc]
+        tokenized_docs_w2v = [doc.split() for doc in list_dokumen_bersih if doc.strip()]
         
         if not tokenized_docs_w2v:
             st.error("❌ ERROR: Tidak ada token untuk dilatih.")
@@ -320,11 +297,11 @@ def generate_dummy_data():
 def deep_learning_classification(texts, labels):
     """
     Klasifikasi teks menggunakan RNN/LSTM
-    
-    Parameters:
-    - texts: list of strings (dokumen teks)
-    - labels: numpy array of integers (label klasifikasi)
     """
+    if not DEEP_LEARNING_AVAILABLE:
+        st.error("❌ Library Deep Learning (Tensorflow/Keras) tidak tersedia.")
+        return
+        
     st.header("🤖 DEEP LEARNING - RNN/LSTM CLASSIFICATION")
     
     st.info("""
@@ -710,12 +687,12 @@ def named_entity_recognition(list_dokumen_mentah):
                 
             except LookupError as e:
                 st.error(f"❌ Error NLTK NER: {e}")
-                st.warning("⚠️ Pastikan data NLTK **'maxent_ne_chunker'** dan **'words'** sudah didownload.")
+                st.warning("⚠️ Pastikan data NLTK **'maxent\_ne\_chunker'** dan **'words'** sudah didownload.")
             except Exception as e:
                 st.error(f"❌ Error NER: {e}")
 
 
-# --- FUNGSI UTAMA UNTUK MEMBACA DOKUMEN ---
+# --- FUNGSI UTAMA UNTUK MEMBACA DOKUMEN (non-CSV) ---
 @st.cache_data
 def read_uploaded_file(uploaded_file):
     """Membaca isi dari file yang diupload (txt, docx, pdf)"""
@@ -730,6 +707,10 @@ def read_uploaded_file(uploaded_file):
             paragraphs = [p.text for p in doc.paragraphs]
             text_content = '\n'.join(paragraphs)
         elif file_extension == 'pdf':
+            if pdfplumber is None:
+                st.warning("⚠️ Library pdfplumber tidak ditemukan. Tidak dapat membaca file PDF.")
+                return None
+            
             # Menggunakan tempfile untuk memastikan pdfplumber bisa mengakses file
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
@@ -740,7 +721,8 @@ def read_uploaded_file(uploaded_file):
                     for page in pdf.pages:
                         text_content += page.extract_text() if page.extract_text() else ""
             finally:
-                os.remove(tmp_path) # Pastikan file temporary dihapus
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path) # Pastikan file temporary dihapus
         else:
             return None
             
@@ -767,21 +749,31 @@ def main_app():
     with st.sidebar:
         st.header("⚙️ Konfigurasi Input")
         
-        # Pilihan Input Teks
+        # Pilihan Input Teks (DITAMBAH: Load CSV Data)
         input_type = st.radio(
             "Pilih Tipe Input:",
-            ("Input Manual", "Upload File", "Web Scraping"),
+            ("Input Manual", "Upload File", "Load CSV Data", "Web Scraping"),
             index=0
         )
         
-        list_dokumen_mentah = []
+        list_dokumen_mentah = st.session_state.get('list_dokumen_mentah', [])
         
+        # Reset list_dokumen_mentah untuk input baru
+        if input_type != st.session_state.get('last_input_type', 'Input Manual'):
+             list_dokumen_mentah = []
+             st.session_state.list_dokumen_mentah = []
+        
+        st.session_state.last_input_type = input_type
+
+
         if input_type == "Input Manual":
             st.subheader("📝 Input Teks Manual")
+            # Gunakan key untuk mempertahankan nilai saat berpindah tab
             manual_text = st.text_area(
                 "Masukkan satu atau lebih dokumen (pisahkan dengan baris baru ganda, gunakan bahasa Inggris untuk hasil NER/POS optimal):",
                 "Jakarta is the capital city of Indonesia. I love this city.\n\n"
-                "Natural Language Processing (NLP) is a field of artificial intelligence."
+                "Natural Language Processing (NLP) is a field of artificial intelligence.",
+                key="manual_input_text"
             )
             if manual_text:
                 # Pisahkan dokumen berdasarkan baris baru ganda
@@ -792,10 +784,12 @@ def main_app():
             uploaded_file = st.file_uploader(
                 "Upload file (.txt, .docx, .pdf)",
                 type=["txt", "docx", "pdf"],
-                accept_multiple_files=True
+                accept_multiple_files=True,
+                key="file_uploader_general"
             )
             
             if uploaded_file:
+                list_dokumen_mentah = []
                 for file in uploaded_file:
                     content = read_uploaded_file(file)
                     if content:
@@ -803,10 +797,50 @@ def main_app():
                 if list_dokumen_mentah:
                     st.success(f"✅ Berhasil membaca {len(list_dokumen_mentah)} dokumen.")
 
+        elif input_type == "Load CSV Data":
+            st.subheader("📊 Load CSV Data (Hasil Crawling)")
+            uploaded_csv = st.file_uploader(
+                "Upload file CSV (misalnya: data_tweet.csv)",
+                type=["csv"],
+                key="file_uploader_csv"
+            )
+            
+            if uploaded_csv:
+                try:
+                    df = pd.read_csv(uploaded_csv)
+                    st.success(f"✅ Berhasil memuat file CSV dengan {len(df)} baris dan {len(df.columns)} kolom.")
+                    
+                    # Tampilkan 5 baris pertama
+                    st.dataframe(df.head(5))
+                    
+                    # Pilihan kolom teks (sesuai modul, kolom tweet adalah 'full_text')
+                    default_index = df.columns.get_loc('full_text') if 'full_text' in df.columns else 0
+                    text_column = st.selectbox(
+                        "Pilih Kolom Teks untuk Analisis:",
+                        options=df.columns.tolist(),
+                        index=default_index
+                    )
+                    
+                    if st.button("Proses Data dari Kolom CSV"):
+                        # Konversi kolom teks menjadi list dokumen mentah
+                        list_dokumen_mentah = df[text_column].astype(str).dropna().tolist()
+                        
+                        if list_dokumen_mentah:
+                            st.success(f"✅ {len(list_dokumen_mentah)} teks berhasil diekstrak dari kolom **'{text_column}'**.")
+                        else:
+                            st.error("❌ Tidak ada data teks yang valid di kolom terpilih.")
+                            
+                        # Hapus dokumen bersih sebelumnya jika input baru
+                        st.session_state.list_dokumen_bersih = []
+                
+                except Exception as e:
+                    st.error(f"❌ Gagal membaca file CSV atau kolom: {e}")
+                    
         elif input_type == "Web Scraping":
             st.subheader("🔗 Web Scraping")
             url = st.text_input("Masukkan URL (Contoh: https://en.wikipedia.org/wiki/NLP):", 
-                                "https://en.wikipedia.org/wiki/Natural_language_processing")
+                                "https://en.wikipedia.org/wiki/Natural_language_processing",
+                                key="url_input")
             
             if st.button("Scrape Konten"):
                 if url:
@@ -821,23 +855,23 @@ def main_app():
                         
                         if not scraped_text.strip():
                             st.warning("⚠️ Tidak ada konten paragraf yang ditemukan.")
+                            list_dokumen_mentah = []
                         else:
                             # Anggap seluruh konten sebagai satu dokumen
-                            list_dokumen_mentah.append(scraped_text)
-                            st.session_state.list_dokumen_mentah_new = list_dokumen_mentah # Trigger update
+                            list_dokumen_mentah = [scraped_text]
                             st.success("✅ Web Scraping selesai.")
                             st.text_area("Konten yang di-Scrape (Snippet):", scraped_text[:1000] + "...", height=200)
 
                     except requests.exceptions.Timeout:
                         st.error("❌ Timeout: Permintaan melebihi batas waktu.")
+                        list_dokumen_mentah = []
                     except requests.exceptions.RequestException as e:
                         st.error(f"❌ Gagal koneksi ke URL: {e}")
+                        list_dokumen_mentah = []
                     except Exception as e:
                         st.error(f"❌ Gagal melakukan web scraping: {e}")
-        
-        # Load dokumen mentah dari session state jika ada
-        if 'list_dokumen_mentah_new' in st.session_state and input_type != "Web Scraping":
-            list_dokumen_mentah = st.session_state.list_dokumen_mentah_new
+                        list_dokumen_mentah = []
+
         
         # Simpan kembali ke session state untuk dibaca tab lain
         st.session_state.list_dokumen_mentah = list_dokumen_mentah
@@ -867,17 +901,17 @@ def main_app():
                 list_dokumen_bersih = []
                 with st.spinner("Memproses semua dokumen..."):
                     for idx, doc in enumerate(list_dokumen_mentah):
-                        st.subheader(f"Dokumen {idx+1}")
+                        st.subheader(f"Dokumen {idx+1} (Panjang: {len(doc.split())} kata)")
                         with st.expander("Lihat Teks Mentah", expanded=False):
-                            st.code(doc, language="markdown")
+                            st.code(doc[:2000], language="markdown") # Batasi 2000 karakter
                         
                         # Jalankan preprocessing
                         cleaned_doc = preprocess_text(doc)
                         
                         if cleaned_doc:
                             list_dokumen_bersih.append(cleaned_doc)
-                            st.markdown("**Hasil Preprocessing (Bersih):**")
-                            st.code(cleaned_doc, language="text")
+                            st.markdown(f"**Hasil Preprocessing (Bersih):** (Panjang: {len(cleaned_doc.split())} kata)")
+                            st.code(cleaned_doc[:2000], language="text") # Batasi 2000 karakter
                         
                 st.session_state.list_dokumen_bersih = list_dokumen_bersih
                 st.success("✅ Preprocessing Selesai untuk semua dokumen!")
@@ -899,49 +933,54 @@ def main_app():
 
     # --- TAB DEEP LEARNING ---
     with tab_dl:
-        st.info("💡 **Catatan:** Klasifikasi Deep Learning membutuhkan data berlabel. Kami menggunakan **data dummy (sentimen positif/negatif)** untuk mendemonstrasikan proses training dan evaluasi.")
-        
-        # Tombol untuk menjalankan Deep Learning dengan data dummy
-        if st.button("▶️ Jalankan Deep Learning Demo (Data Dummy)", type="primary", key="dl_demo_button"):
-            dummy_texts, dummy_labels = generate_dummy_data()
-            deep_learning_classification(dummy_texts, dummy_labels)
-        
-        st.markdown("---")
-        st.subheader("Prediksi Teks Baru (Menggunakan Model Demo)")
-        
-        if 'trained_model' in st.session_state:
-            model = st.session_state.trained_model
-            tokenizer = st.session_state.tokenizer
-            max_len = st.session_state.max_len
+        if DEEP_LEARNING_AVAILABLE:
+            st.info("💡 **Catatan:** Klasifikasi Deep Learning membutuhkan data berlabel. Kami menggunakan **data dummy (sentimen positif/negatif)** untuk mendemonstrasikan proses training dan evaluasi.")
             
-            st.success("✅ Model Demo (Simple RNN/LSTM) sudah dilatih dan siap digunakan.")
+            # Tombol untuk menjalankan Deep Learning dengan data dummy
+            if st.button("▶️ Jalankan Deep Learning Demo (Data Dummy)", type="primary", key="dl_demo_button"):
+                dummy_texts, dummy_labels = generate_dummy_data()
+                deep_learning_classification(dummy_texts, dummy_labels)
             
-            new_text_predict = st.text_area("Masukkan teks baru untuk diprediksi sentimennya (Contoh: I love this, it is bad):", 
-                                            "This service was disappointing, not worth the price.")
+            st.markdown("---")
+            st.subheader("Prediksi Teks Baru (Menggunakan Model Demo)")
             
-            if st.button("🔮 Prediksi Teks Baru", key="predict_new_text"):
-                if new_text_predict.strip():
-                    # Tokenize and Pad
-                    new_seq = tokenizer.texts_to_sequences([new_text_predict])
-                    new_padded = pad_sequences(new_seq, maxlen=max_len, padding='post', truncating='post')
-                    
-                    # Predict
-                    prediction = model.predict(new_padded, verbose=0)
-                    
-                    # Asumsi 2 kelas (karena data dummy)
-                    pred_label = int(prediction[0] > 0.5)
-                    confidence = float(prediction[0]) if pred_label == 1 else 1 - float(prediction[0])
-                    label_name = "Positive (1)" if pred_label == 1 else "Negative (0)"
-                    
-                    st.success(f"**Prediksi Sentimen:** {label_name}")
-                    st.info(f"**Confidence:** {confidence:.2%}")
-                    
-                    st.progress(confidence)
-                else:
-                    st.warning("⚠️ Masukkan teks terlebih dahulu!")
-            
+            if 'trained_model' in st.session_state:
+                model = st.session_state.trained_model
+                tokenizer = st.session_state.tokenizer
+                max_len = st.session_state.max_len
+                
+                st.success("✅ Model Demo (Simple RNN/LSTM) sudah dilatih dan siap digunakan.")
+                
+                new_text_predict = st.text_area("Masukkan teks baru untuk diprediksi sentimennya (Contoh: I love this, it is bad)::", 
+                                                "This service was disappointing, not worth the price.")
+                
+                if st.button("🔮 Prediksi Teks Baru", key="predict_new_text"):
+                    if new_text_predict.strip():
+                        # Tokenize and Pad
+                        new_seq = tokenizer.texts_to_sequences([new_text_predict])
+                        new_padded = pad_sequences(new_seq, maxlen=max_len, padding='post', truncating='post')
+                        
+                        # Predict
+                        prediction = model.predict(new_padded, verbose=0)
+                        
+                        # Asumsi 2 kelas (karena data dummy)
+                        pred_label = int(prediction[0] > 0.5)
+                        # Confidence untuk label yang diprediksi
+                        confidence = float(prediction[0]) if pred_label == 1 else 1 - float(prediction[0])
+                        label_name = "Positive (1)" if pred_label == 1 else "Negative (0)"
+                        
+                        st.success(f"**Prediksi Sentimen:** {label_name}")
+                        st.info(f"**Confidence:** {confidence:.2%}")
+                        
+                        st.progress(confidence)
+                    else:
+                        st.warning("⚠️ Masukkan teks terlebih dahulu!")
+                
+            else:
+                st.warning("Mohon jalankan **'Deep Learning Demo'** terlebih dahulu.")
         else:
-            st.warning("Mohon jalankan **'Deep Learning Demo'** terlebih dahulu.")
+            st.error("❌ Deep Learning (Tensorflow/Keras) tidak dapat dimuat. Fitur ini dinonaktifkan.")
+
 
     # --- TAB ANALISIS LANJUTAN ---
     with tab_advanced:
@@ -969,6 +1008,8 @@ if __name__ == '__main__':
         st.session_state.list_dokumen_bersih = []
     if 'list_dokumen_mentah' not in st.session_state:
         st.session_state.list_dokumen_mentah = []
+    if 'last_input_type' not in st.session_state:
+        st.session_state.last_input_type = 'Input Manual'
     
     # Run main application
     main_app()
