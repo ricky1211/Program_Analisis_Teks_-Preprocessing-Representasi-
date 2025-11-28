@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime, timedelta
 
 # Preprocessing
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
@@ -20,14 +21,12 @@ from gensim.models import Word2Vec
 
 # Document Processing
 import docx
-# Gunakan try-except untuk pdfplumber karena mungkin tidak selalu terinstal
 try:
     import pdfplumber
 except ImportError:
     pdfplumber = None
 
 # Deep Learning
-# Gunakan try-except untuk Tensorflow/Keras karena mungkin tidak selalu terinstal
 try:
     import tensorflow as tf
     from tensorflow import keras
@@ -53,7 +52,6 @@ from nltk.chunk import ne_chunk
 @st.cache_resource
 def download_nltk_data():
     """Download semua data NLTK yang diperlukan"""
-    # Daftar paket NLTK yang diperlukan
     nltk_packages = [
         'punkt',
         'averaged_perceptron_tagger',
@@ -63,11 +61,9 @@ def download_nltk_data():
     
     for package in nltk_packages:
         try:
-            # Cek di path standard NLTK
             nltk.data.find(f'tokenizers/{package}')
         except LookupError:
             try:
-                # Coba download jika tidak ada
                 nltk.download(package, quiet=True)
             except Exception:
                 pass
@@ -96,7 +92,6 @@ def download_nltk_data():
             except Exception:
                 pass
 
-# Download data NLTK
 try:
     download_nltk_data()
 except Exception as e:
@@ -119,14 +114,59 @@ try:
     stemmer, stopword_remover = inisialisasi_model()
 except Exception as e:
     st.error(f"❌ Gagal memuat model Sastrawi: {e}")
-    # Jika gagal, tampilkan pesan error tapi tidak menghentikan aplikasi
     pass 
+
+
+# --- FUNGSI SIMULASI CRAWLING ---
+def simulate_x_crawling(keyword, limit):
+    """
+    Fungsi simulasi untuk membuat DataFrame hasil crawling.
+    Ini menggantikan output dari 'tweet-harvest'.
+    """
+    st.warning("⚠️ **Mode Simulasi Aktif:** Aplikasi ini tidak melakukan crawling X/Twitter secara real-time. Data di bawah adalah data placeholder berdasarkan input Anda.")
+    
+    if limit == 0:
+        return pd.DataFrame()
+
+    # Data dummy tweets (placeholder untuk simulasi)
+    base_tweets = [
+        f"Jangan lupa {keyword} produk boikot Israel, ini penting!",
+        f"Review hasil pencarian {keyword} di media sosial. Jumlah: {limit} data.",
+        f"Lagi-lagi Zara Store sedang berdiskusi dengan menteri keuangan (read) ice.",
+        "Ini hoax ya guys!! Lawan mainkan strategi lama bukan kesan se.",
+        "MBS Turun Tangan! Minta Semua Negara Boikot. Putra Mahkota te.",
+        f"Selamatkan Gaza, mari lakukan {keyword} bersama-sama.",
+        "Dilema Melayu Liberal Boikot Produk BMF dikelola.",
+        "Aksi {keyword} ini sudah berjalan 84 hari, dukungan terus mengalir.",
+        "Kami menolak segala bentuk kekerasan di Timur Tengah."
+    ]
+
+    data = {
+        'conversation_id_str': [1741185994123429000 + i for i in range(limit)],
+        'created_at': [datetime.now() - timedelta(hours=i*3) for i in range(limit)],
+        'favorite_count': np.random.randint(0, 1000, size=limit),
+        'full_text': [base_tweets[i % len(base_tweets)] for i in range(limit)],
+        'username': [f'user_{i}' for i in range(limit)],
+        'retweet_count': np.random.randint(0, 500, size=limit)
+    }
+
+    df = pd.DataFrame(data)
+    # Format created_at agar mirip output Colab
+    df['created_at'] = df['created_at'].dt.strftime('%a %b %d %H:%M:%S +0000 %Y')
+    
+    return df
+
+# --- FUNGSI DOWNLOAD ---
+@st.cache_data
+def convert_df_to_csv(df):
+    """Konversi DataFrame ke CSV untuk didownload."""
+    # Menggunakan to_csv untuk memastikan formatnya benar
+    return df.to_csv(index=False, sep=',').encode('utf-8')
 
 
 # --- FUNGSI PREPROCESSING ---
 def tokenize_manual(text):
     """Tokenisasi manual menggunakan regex"""
-    # Mencari kata yang hanya terdiri dari huruf
     tokens = re.findall(r'\b[a-zA-Z]+\b', text)
     return tokens
 
@@ -135,7 +175,6 @@ def preprocess_text(text):
     try:
         st.info("   📝 Case folding & cleaning...")
         text = text.lower()
-        # Hapus karakter selain huruf dan spasi
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
         st.info("   ✂️ Tokenizing...")
@@ -146,12 +185,10 @@ def preprocess_text(text):
             return ""
         
         st.info("   🚫 Stopword removal...")
-        # Gabungkan tokens menjadi string sebelum stopword removal
         text_tanpa_stopword = stopword_remover.remove(' '.join(tokens))
         
         st.info("   🌱 Stemming...")
         tokens_tanpa_stopword = text_tanpa_stopword.split()
-        # Stemming hanya pada token yang tersisa
         stemmed_tokens = [stemmer.stem(token) for token in tokens_tanpa_stopword]
         
         hasil = ' '.join(stemmed_tokens)
@@ -162,6 +199,10 @@ def preprocess_text(text):
         st.error(f"❌ Error saat preprocessing: {e}")
         return ""
 
+
+# ... (Fungsi run_analysis, generate_dummy_data, deep_learning_classification, 
+#      pos_tagging_analysis, named_entity_recognition, read_uploaded_file 
+#      TIDAK BERUBAH dari kode sebelumnya) ...
 
 # --- FUNGSI ANALISIS REPRESENTASI TEKS ---
 def run_analysis(list_dokumen_bersih):
@@ -775,11 +816,11 @@ def main_app():
     with st.sidebar:
         st.header("⚙️ Konfigurasi Input")
         
-        # Pilihan Input Teks (DITAMBAH: Load CSV Data)
+        # Pilihan Input Teks (Diubah menjadi opsi Crawling Simulasi)
         input_type = st.radio(
             "Pilih Tipe Input:",
-            ("Input Manual", "Upload File", "Load CSV Data", "Web Scraping"),
-            index=0
+            ("Input Manual", "Upload File", "X/Twitter Crawling (Simulasi)", "Web Scraping"),
+            index=2 # Default ke crawling simulasi
         )
         
         list_dokumen_mentah = st.session_state.get('list_dokumen_mentah', [])
@@ -788,7 +829,6 @@ def main_app():
         if input_type != st.session_state.get('last_input_type', 'Input Manual'):
              list_dokumen_mentah = []
              st.session_state.list_dokumen_mentah = []
-             # Juga reset dokumen bersih jika input berubah
              st.session_state.list_dokumen_bersih = [] 
         
         st.session_state.last_input_type = input_type
@@ -796,7 +836,6 @@ def main_app():
 
         if input_type == "Input Manual":
             st.subheader("📝 Input Teks Manual")
-            # Gunakan key untuk mempertahankan nilai saat berpindah tab
             manual_text = st.text_area(
                 "Masukkan satu atau lebih dokumen (pisahkan dengan baris baru ganda, gunakan bahasa Inggris untuk hasil NER/POS optimal):",
                 "Jakarta is the capital city of Indonesia. I love this city.\n\n"
@@ -804,14 +843,14 @@ def main_app():
                 key="manual_input_text"
             )
             if manual_text:
-                # Pisahkan dokumen berdasarkan baris baru ganda
                 list_dokumen_mentah = [doc.strip() for doc in manual_text.split('\n\n') if doc.strip()]
         
         elif input_type == "Upload File":
             st.subheader("📁 Upload Dokumen")
+            st.info("Gunakan opsi ini untuk upload `data_tweet.csv` hasil crawling Colab.")
             uploaded_file = st.file_uploader(
-                "Upload file (.txt, .docx, .pdf)",
-                type=["txt", "docx", "pdf"],
+                "Upload file (.txt, .docx, .pdf, .csv)",
+                type=["txt", "docx", "pdf", "csv"],
                 accept_multiple_files=True,
                 key="file_uploader_general"
             )
@@ -819,66 +858,71 @@ def main_app():
             if uploaded_file:
                 list_dokumen_mentah = []
                 for file in uploaded_file:
-                    content = read_uploaded_file(file)
-                    if content:
-                        list_dokumen_mentah.append(content)
+                    # Cek jika file adalah CSV, proses sebagai CSV
+                    if file.name.endswith('.csv'):
+                         try:
+                            df_csv = pd.read_csv(file)
+                            st.success(f"✅ Berhasil memuat file CSV: {file.name}")
+                            # Asumsi kolom teks adalah 'full_text'
+                            if 'full_text' in df_csv.columns:
+                                list_dokumen_mentah.extend(df_csv['full_text'].astype(str).dropna().tolist())
+                            else:
+                                st.error(f"❌ Kolom 'full_text' tidak ditemukan di {file.name}")
+                         except Exception as e:
+                             st.error(f"❌ Gagal membaca CSV {file.name}: {e}")
+                    else:
+                        content = read_uploaded_file(file)
+                        if content:
+                            list_dokumen_mentah.append(content)
                 if list_dokumen_mentah:
-                    st.success(f"✅ Berhasil membaca {len(list_dokumen_mentah)} dokumen.")
+                    st.success(f"✅ Total {len(list_dokumen_mentah)} dokumen/tweet berhasil dimuat.")
 
-        elif input_type == "Load CSV Data":
-            st.subheader("📊 Load CSV Data (Hasil Crawling)")
-            st.info("💡 **Gunakan opsi ini untuk memuat `data_tweet.csv` hasil crawling dari Google Colab/X.**")
+        elif input_type == "X/Twitter Crawling (Simulasi)":
+            st.subheader("🔗 X/Twitter Crawling (Simulasi)")
             
-            # --- MODIFIKASI: INPUT AUTH TOKEN ---
+            # --- INPUT TOKEN & PARAMETER CRAWLING ---
             auth_token_input = st.text_input(
-                "Masukkan X/Twitter Auth Token Anda (Opsional, diperlukan untuk crawling langsung):",
+                "Masukkan X/Twitter Auth Token Anda:",
                 type="password",
                 key="auth_token_input"
             )
-            if auth_token_input:
-                st.success("✅ Auth Token dimasukkan.")
-                # Anda dapat menyimpan token ini ke session state jika Anda mengimplementasikan crawling Python murni di masa depan
-                st.session_state.auth_token = auth_token_input 
-            else:
-                 if 'auth_token' in st.session_state:
-                     del st.session_state.auth_token
-
-            # --- AKHIR MODIFIKASI: INPUT AUTH TOKEN ---
-
-            uploaded_csv = st.file_uploader(
-                "Upload file CSV (misalnya: data_tweet.csv)",
-                type=["csv"],
-                key="file_uploader_csv"
-            )
+            search_keyword = st.text_input("Keyword Pencarian (misal: boikot)", "boikot")
+            limit = st.slider("Jumlah Data (Limit)", 10, 500, 50)
             
-            if uploaded_csv:
-                try:
-                    df = pd.read_csv(uploaded_csv)
-                    st.success(f"✅ Berhasil memuat file CSV dengan {len(df)} baris dan {len(df.columns)} kolom.")
+            if st.button("🚀 Mulai Crawling & Analisis"):
+                if not auth_token_input:
+                    st.error("❌ Auth Token diperlukan untuk memulai simulasi.")
+                elif not search_keyword:
+                     st.error("❌ Keyword pencarian tidak boleh kosong.")
+                else:
+                    # --- EKSEKUSI SIMULASI CRAWLING ---
+                    st.info(f"🔄 Mensimulasikan crawling dengan Keyword: '{search_keyword}', Limit: {limit}")
                     
-                    st.dataframe(df.head(5))
+                    df_hasil_crawl = simulate_x_crawling(search_keyword, limit)
                     
-                    default_index = df.columns.get_loc('full_text') if 'full_text' in df.columns else 0
-                    text_column = st.selectbox(
-                        "Pilih Kolom Teks untuk Analisis (Kolom Tweet/X):",
-                        options=df.columns.tolist(),
-                        index=default_index,
-                        key="csv_text_column_select"
-                    )
-                    
-                    if st.button("Proses Data dari Kolom CSV"):
-                        list_dokumen_mentah = df[text_column].astype(str).dropna().tolist()
+                    if not df_hasil_crawl.empty:
+                        list_dokumen_mentah = df_hasil_crawl['full_text'].astype(str).dropna().tolist()
+                        st.session_state.list_dokumen_mentah = list_dokumen_mentah
+                        st.session_state.df_hasil_crawl = df_hasil_crawl # Simpan DF untuk download
+                        st.session_state.list_dokumen_bersih = []
                         
-                        if list_dokumen_mentah:
-                            st.success(f"✅ {len(list_dokumen_mentah)} teks berhasil diekstrak dari kolom **'{text_column}'**.")
-                            st.session_state.list_dokumen_mentah = list_dokumen_mentah
-                            st.session_state.list_dokumen_bersih = []
-                        else:
-                            st.error("❌ Tidak ada data teks yang valid di kolom terpilih.")
-                
-                except Exception as e:
-                    st.error(f"❌ Gagal membaca file CSV atau kolom: {e}")
-                    
+                        st.success(f"✅ Simulasi Crawling Selesai! Ditemukan {len(list_dokumen_mentah)} tweet.")
+                        st.dataframe(df_hasil_crawl.head(5))
+
+                        # --- TOMBOL DOWNLOAD HASIL ---
+                        csv = convert_df_to_csv(df_hasil_crawl)
+                        st.download_button(
+                            label="⬇️ Download Hasil Crawling (CSV)",
+                            data=csv,
+                            file_name=f'data_tweet_{search_keyword.replace(" ", "_")}.csv',
+                            mime='text/csv',
+                            type="primary"
+                        )
+                        # --- AKHIR TOMBOL DOWNLOAD ---
+                        
+                    else:
+                        st.warning("⚠️ Simulasi tidak menghasilkan data.")
+            
         elif input_type == "Web Scraping":
             st.subheader("🔗 Web Scraping")
             url = st.text_input("Masukkan URL (Contoh: https://en.wikipedia.org/wiki/NLP):", 
@@ -892,7 +936,6 @@ def main_app():
                         response = requests.get(url, timeout=10)
                         soup = BeautifulSoup(response.text, 'html.parser')
                         
-                        # Ekstrak semua teks dari tag <p>
                         paragraphs = soup.find_all('p')
                         scraped_text = '\n'.join([p.get_text() for p in paragraphs])
                         
@@ -900,7 +943,6 @@ def main_app():
                             st.warning("⚠️ Tidak ada konten paragraf yang ditemukan.")
                             list_dokumen_mentah = []
                         else:
-                            # Anggap seluruh konten sebagai satu dokumen
                             list_dokumen_mentah = [scraped_text]
                             st.session_state.list_dokumen_mentah = list_dokumen_mentah
                             st.session_state.list_dokumen_bersih = []
@@ -963,7 +1005,6 @@ def main_app():
                 st.session_state.list_dokumen_bersih = list_dokumen_bersih
                 st.success("✅ Preprocessing Selesai untuk semua dokumen!")
             else:
-                # Muat dari session state jika sudah diproses
                 if 'list_dokumen_bersih' not in st.session_state:
                      st.session_state.list_dokumen_bersih = []
                 st.info("Klik tombol **'Mulai Preprocessing'** untuk memproses dokumen dan melanjutkan ke tab berikutnya.")
@@ -983,7 +1024,6 @@ def main_app():
         if DEEP_LEARNING_AVAILABLE:
             st.info("💡 **Catatan:** Klasifikasi Deep Learning membutuhkan data berlabel. Kami menggunakan **data dummy (sentimen positif/negatif)** untuk mendemonstrasikan proses training dan evaluasi.")
             
-            # Tombol untuk menjalankan Deep Learning dengan data dummy
             if st.button("▶️ Jalankan Deep Learning Demo (Data Dummy)", type="primary", key="dl_demo_button"):
                 dummy_texts, dummy_labels = generate_dummy_data()
                 deep_learning_classification(dummy_texts, dummy_labels)
@@ -1003,16 +1043,12 @@ def main_app():
                 
                 if st.button("🔮 Prediksi Teks Baru", key="predict_new_text"):
                     if new_text_predict.strip():
-                        # Tokenize and Pad
                         new_seq = tokenizer.texts_to_sequences([new_text_predict])
                         new_padded = pad_sequences(new_seq, maxlen=max_len, padding='post', truncating='post')
                         
-                        # Predict
                         prediction = model.predict(new_padded, verbose=0)
                         
-                        # Asumsi 2 kelas (karena data dummy)
                         pred_label = int(prediction[0] > 0.5)
-                        # Confidence untuk label yang diprediksi
                         confidence = float(prediction[0]) if pred_label == 1 else 1 - float(prediction[0])
                         label_name = "Positive (1)" if pred_label == 1 else "Negative (0)"
                         
