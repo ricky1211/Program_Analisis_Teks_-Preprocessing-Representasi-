@@ -115,26 +115,29 @@ def check_node_installation():
 def install_nodejs():
     """Instalasi Node.js untuk sistem Linux (Google Colab compatible)"""
     try:
-        st.info("🔧 Menginstal Node.js...")
+        st.info("🔧 Mencoba menginstal Node.js...")
         
-        # Install Node.js
-        subprocess.run(['curl', '-fsSL', 'https://deb.nodesource.com/setup_18.x', 
-                       '-o', '/tmp/nodesource_setup.sh'], check=True, capture_output=True)
-        subprocess.run(['bash', '/tmp/nodesource_setup.sh'], check=True, capture_output=True)
-        subprocess.run(['apt-get', 'install', '-y', 'nodejs'], check=True, capture_output=True)
+        # Cek apakah punya sudo access
+        has_sudo = subprocess.run(['which', 'sudo'], capture_output=True).returncode == 0
         
-        # Install dependencies for Puppeteer
-        subprocess.run(['apt-get', 'install', '-y', 
-                       'libnss3', 'libatk1.0-0', 'libatk-bridge2.0-0', 
-                       'libcups2', 'libdrm2', 'libxcomposite1', 'libxdamage1',
-                       'libxrandr2', 'libgbm1', 'libasound2', 'libpangocairo-1.0-0',
-                       'libxss1', 'libgtk-3-0', 'libx11-xcb1', 'libxshmfence1'],
-                      check=True, capture_output=True)
+        if not has_sudo:
+            st.warning("⚠️ Tidak ada sudo access. Node.js harus diinstall secara manual atau gunakan mode simulasi.")
+            return False
+        
+        # Install Node.js dengan sudo
+        subprocess.run(['sudo', 'curl', '-fsSL', 'https://deb.nodesource.com/setup_18.x', 
+                       '-o', '/tmp/nodesource_setup.sh'], check=True, capture_output=True, timeout=30)
+        subprocess.run(['sudo', 'bash', '/tmp/nodesource_setup.sh'], check=True, capture_output=True, timeout=60)
+        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'nodejs'], check=True, capture_output=True, timeout=120)
         
         st.success("✅ Node.js berhasil diinstal!")
         return True
+        
+    except subprocess.TimeoutExpired:
+        st.warning("⚠️ Instalasi Node.js timeout. Gunakan mode simulasi.")
+        return False
     except Exception as e:
-        st.error(f"❌ Gagal menginstal Node.js: {e}")
+        st.warning(f"⚠️ Instalasi Node.js gagal: {str(e)[:100]}")
         return False
 
 
@@ -181,9 +184,24 @@ def real_twitter_crawling(auth_token, search_query, limit):
     
     # Cek Node.js
     if not check_node_installation():
-        st.warning("⚠️ Node.js belum terinstall. Mencoba instalasi otomatis...")
-        if not install_nodejs():
-            st.error("❌ Instalasi Node.js gagal. Gunakan mode simulasi.")
+        st.warning("⚠️ Node.js belum terinstall.")
+        
+        # Tampilkan info platform
+        import platform
+        os_type = platform.system()
+        
+        if os_type == "Linux":
+            st.info("📦 Platform: Linux - Mencoba instalasi otomatis...")
+            if not install_nodejs():
+                st.error("❌ Instalasi gagal. Silakan gunakan **Mode Simulasi** atau install Node.js secara manual.")
+                st.info("💡 **Cara install manual:**\n```bash\nsudo apt-get update\nsudo apt-get install -y nodejs npm\n```")
+                return None
+        else:
+            st.warning(f"📦 Platform: {os_type}")
+            st.info("💡 **Untuk crawling real, install Node.js terlebih dahulu:**")
+            st.markdown("- **Windows/Mac**: Download dari [nodejs.org](https://nodejs.org/)")
+            st.markdown("- Setelah install, restart aplikasi ini")
+            st.markdown("- Atau gunakan **Mode Simulasi** untuk testing")
             return None
     
     # Generate filename
@@ -202,6 +220,7 @@ def real_twitter_crawling(auth_token, search_query, limit):
                 
                 if df.empty:
                     st.error("❌ File CSV kosong. Kemungkinan token tidak valid atau tidak ada data.")
+                    st.info("💡 **Tips:**\n- Pastikan token masih fresh\n- Coba dengan limit lebih kecil (10-20)\n- Gunakan keyword yang lebih spesifik")
                     return None
                 
                 st.success(f"✅ Berhasil crawling {len(df)} tweets!")
@@ -215,6 +234,7 @@ def real_twitter_crawling(auth_token, search_query, limit):
             return None
     else:
         st.error(f"❌ Crawling gagal: {message}")
+        st.info("💡 Kemungkinan penyebab:\n- Token tidak valid/expired\n- Rate limit Twitter\n- Koneksi internet bermasalah")
         return None
 
 
@@ -759,7 +779,11 @@ def main_app():
                 keyword = st.text_input("Keyword:", "python")
                 search_query = keyword
             
-            use_simulation = st.checkbox("🎭 Gunakan Mode Simulasi (tanpa crawling real)", value=False)
+            use_simulation = st.checkbox(
+                "🎭 Gunakan Mode Simulasi (Tanpa Node.js)", 
+                value=True,
+                help="Aktifkan ini jika Node.js tidak terinstall atau untuk testing cepat"
+            )
             
             if st.button("🚀 Mulai Crawling & Analisis", type="primary"):
                 if not auth_token and not use_simulation:
