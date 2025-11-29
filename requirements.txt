@@ -9,8 +9,11 @@ pdfplumber
 requests
 beautifulsoup4
 nltk
-SpeechRecognition
 tensorflow
 keras
 matplotlib
 seaborn
+lxml
+html5lib
+openpyxl
+pillow
