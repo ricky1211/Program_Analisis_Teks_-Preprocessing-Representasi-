@@ -102,7 +102,7 @@ def inisialisasi_model():
 stemmer, stopword_remover = inisialisasi_model()
 
 
-# --- FUNGSI TWITTER CRAWLING REAL ---
+# --- FUNGSI TWITTER CRAWLING REAL (TIDAK BERUBAH) ---
 def check_node_installation():
     """Cek apakah Node.js sudah terinstall"""
     try:
@@ -126,7 +126,7 @@ def install_nodejs():
         
         # Install Node.js dengan sudo
         subprocess.run(['sudo', 'curl', '-fsSL', 'https://deb.nodesource.com/setup_18.x', 
-                       '-o', '/tmp/nodesource_setup.sh'], check=True, capture_output=True, timeout=30)
+                        '-o', '/tmp/nodesource_setup.sh'], check=True, capture_output=True, timeout=30)
         subprocess.run(['sudo', 'bash', '/tmp/nodesource_setup.sh'], check=True, capture_output=True, timeout=60)
         subprocess.run(['sudo', 'apt-get', 'install', '-y', 'nodejs'], check=True, capture_output=True, timeout=120)
         
@@ -238,7 +238,7 @@ def real_twitter_crawling(auth_token, search_query, limit):
         return None
 
 
-# --- FUNGSI SIMULASI CRAWLING (FALLBACK) ---
+# --- FUNGSI SIMULASI CRAWLING (FALLBACK) (TIDAK BERUBAH) ---
 def simulate_x_crawling(limit):
     """Fungsi simulasi untuk fallback mode"""
     st.warning("⚠️ **Mode Simulasi:** Data di bawah adalah placeholder.")
@@ -273,14 +273,14 @@ def simulate_x_crawling(limit):
     return df
 
 
-# --- FUNGSI DOWNLOAD ---
+# --- FUNGSI DOWNLOAD (TIDAK BERUBAH) ---
 @st.cache_data
 def convert_df_to_csv(df):
     """Konversi DataFrame ke CSV untuk didownload."""
     return df.to_csv(index=False, sep=',').encode('utf-8')
 
 
-# --- FUNGSI PREPROCESSING ---
+# --- FUNGSI PREPROCESSING (TIDAK BERUBAH) ---
 def tokenize_manual(text):
     """Tokenisasi manual menggunakan regex"""
     tokens = re.findall(r'\b[a-zA-Z]+\b', text)
@@ -294,26 +294,26 @@ def preprocess_text(text):
         return text.lower()
         
     try:
-        st.info("   📝 Case folding & cleaning...")
+        st.info("    📝 Case folding & cleaning...")
         text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         
-        st.info("   ✂️ Tokenizing...")
+        st.info("    ✂️ Tokenizing...")
         tokens = tokenize_manual(text)
         
         if not tokens:
             st.warning("⚠️ Tidak ada token yang dihasilkan")
             return ""
         
-        st.info("   🚫 Stopword removal...")
+        st.info("    🚫 Stopword removal...")
         text_tanpa_stopword = stopword_remover.remove(' '.join(tokens))
         
-        st.info("   🌱 Stemming...")
+        st.info("    🌱 Stemming...")
         tokens_tanpa_stopword = text_tanpa_stopword.split()
         stemmed_tokens = [stemmer.stem(token) for token in tokens_tanpa_stopword]
         
         hasil = ' '.join(stemmed_tokens)
-        st.success(f"   ✅ Preprocessing selesai! Token: {len(stemmed_tokens)}")
+        st.success(f"    ✅ Preprocessing selesai! Token: {len(stemmed_tokens)}")
         return hasil
         
     except Exception as e:
@@ -321,7 +321,7 @@ def preprocess_text(text):
         return ""
 
 
-# --- FUNGSI ANALISIS REPRESENTASI TEKS ---
+# --- FUNGSI ANALISIS REPRESENTASI TEKS (TIDAK BERUBAH) ---
 def run_analysis(list_dokumen_bersih):
     """Menganalisis dokumen dengan BoW, TF-IDF, dan Word2Vec"""
     st.header("📊 IMPLEMENTASI REPRESENTASI TEKS")
@@ -397,8 +397,8 @@ def run_analysis(list_dokumen_bersih):
             model_w2v = Word2Vec(
                 sentences=tokenized_docs_w2v, 
                 vector_size=100, 
-                window=5,        
-                min_count=1,     
+                window=5,      
+                min_count=1,   
                 workers=4,
                 epochs=10
             )
@@ -431,7 +431,7 @@ def run_analysis(list_dokumen_bersih):
         st.error(f"❌ ERROR Word2Vec: {e}")
 
 
-# --- FUNGSI DEEP LEARNING ---
+# --- FUNGSI DEEP LEARNING (TIDAK BERUBAH) ---
 def generate_dummy_data():
     """Generate data dummy untuk demonstrasi"""
     positive_texts = [
@@ -598,7 +598,7 @@ def deep_learning_classification(texts, labels):
         cm = confusion_matrix(y_test, y_pred)
         fig, ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, 
-                   xticklabels=target_names, yticklabels=target_names)
+                    xticklabels=target_names, yticklabels=target_names)
         st.pyplot(fig)
         
         st.session_state.trained_model = model
@@ -606,7 +606,7 @@ def deep_learning_classification(texts, labels):
         st.session_state.max_len = max_len
 
 
-# --- FUNGSI ANALISIS LANJUTAN ---
+# --- FUNGSI ANALISIS LANJUTAN (TIDAK BERUBAH) ---
 def pos_tagging_analysis(list_dokumen_mentah):
     """POS Tagging Analysis"""
     st.header("🏷️ POS TAGGING")
@@ -664,7 +664,7 @@ def named_entity_recognition(list_dokumen_mentah):
                 st.error(f"❌ Error: {e}")
 
 
-# --- FUNGSI BACA FILE ---
+# --- FUNGSI BACA FILE (TIDAK BERUBAH) ---
 @st.cache_data
 def read_uploaded_file(uploaded_file):
     """Membaca file upload"""
@@ -704,6 +704,78 @@ def read_uploaded_file(uploaded_file):
         return None
 
 
+# --- FUNGSI BARU UNTUK WEB SCRAPING TABEL ---
+def scrape_table(url):
+    """Scrape data tabel dari URL menggunakan pandas"""
+    st.info(f"⏳ Mencoba mengambil tabel dari {url}...")
+    try:
+        # Gunakan requests untuk cek respons dan header
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status() # Cek error HTTP
+        
+        # Baca tabel
+        df_list = pd.read_html(response.text)
+        
+        if not df_list:
+            st.warning("⚠️ Tidak ada tabel yang ditemukan di URL ini.")
+            return None
+        
+        st.success(f"✅ Berhasil menemukan {len(df_list)} tabel!")
+        
+        all_text = []
+        
+        # Gabungkan semua data tabel menjadi satu string
+        for idx, df in enumerate(df_list):
+            st.subheader(f"Tabel {idx + 1}")
+            st.dataframe(df.head())
+            # Konversi semua kolom menjadi string dan gabungkan
+            table_text = " ".join(df.astype(str).agg(' '.join, axis=1).tolist())
+            all_text.append(f"Tabel {idx + 1} data: {table_text}")
+            
+        return [" ".join(all_text)] # Mengembalikan sebagai list dokumen mentah
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Gagal mengakses URL: {e}")
+        return None
+    except ValueError:
+        st.error("❌ Pandas gagal menemukan tabel HTML di halaman.")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error scraping tabel: {e}")
+        return None
+
+
+# --- FUNGSI BARU UNTUK WEB SCRAPING PARAGRAF ---
+def scrape_paragraph(url):
+    """Scrape teks paragraf dari URL menggunakan BeautifulSoup"""
+    st.info(f"⏳ Mencoba mengambil paragraf dari {url}...")
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status() # Cek error HTTP
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        paragraphs = soup.find_all('p')
+        scraped_text = '\n'.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+        
+        if scraped_text.strip():
+            list_dokumen_mentah = [scraped_text]
+            st.success("✅ Scraping paragraf selesai")
+            st.text_area("Preview (500 karakter pertama):", scraped_text[:500] + "...", height=150)
+            return list_dokumen_mentah
+        else:
+            st.warning("⚠️ Tidak ada paragraf yang ditemukan")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Gagal mengakses URL: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error scraping paragraf: {e}")
+        return None
+
+
 # --- APLIKASI UTAMA ---
 def main_app():
     """Fungsi utama aplikasi"""
@@ -735,7 +807,7 @@ def main_app():
         
         st.session_state.last_input_type = input_type
 
-        # --- TWITTER CRAWLING REAL ---
+        # --- TWITTER CRAWLING REAL (TIDAK BERUBAH) ---
         if input_type == "Twitter Crawling (Real)":
             st.subheader("🐦 Twitter Crawler")
             
@@ -821,7 +893,7 @@ def main_app():
                                 mime='text/csv'
                             )
 
-        # --- INPUT MANUAL ---
+        # --- INPUT MANUAL (TIDAK BERUBAH) ---
         elif input_type == "Input Manual":
             st.subheader("📝 Input Manual")
             manual_text = st.text_area(
@@ -834,7 +906,7 @@ def main_app():
                 list_dokumen_mentah = [doc.strip() for doc in manual_text.split('\n\n') if doc.strip()]
                 st.session_state.list_dokumen_mentah = list_dokumen_mentah
         
-        # --- UPLOAD FILE ---
+        # --- UPLOAD FILE (TIDAK BERUBAH) ---
         elif input_type == "Upload File":
             st.subheader("📁 Upload File")
             uploaded_files = st.file_uploader(
@@ -866,35 +938,47 @@ def main_app():
                 if list_dokumen_mentah:
                     st.success(f"✅ {len(list_dokumen_mentah)} dokumen dimuat")
 
-        # --- WEB SCRAPING ---
+        # --- WEB SCRAPING (MODIFIKASI) ---
         elif input_type == "Web Scraping":
             st.subheader("🔗 Web Scraping")
-            url = st.text_input("URL:", "https://en.wikipedia.org/wiki/Natural_language_processing")
+            url = st.text_input(
+                "URL Sumber (Contoh: artikel berita, halaman Wikipedia):", 
+                "https://en.wikipedia.org/wiki/Natural_language_processing"
+            )
             
-            if st.button("Scrape"):
+            scraping_mode = st.radio(
+                "Mode Scraping:",
+                ["Teks Paragraf", "Data Tabel"],
+                index=0
+            )
+            
+            if st.button("Scrape & Analisis", type="primary"):
                 if url:
-                    try:
-                        with st.spinner("⏳ Scraping..."):
-                            response = requests.get(url, timeout=10)
-                            soup = BeautifulSoup(response.text, 'html.parser')
-                            paragraphs = soup.find_all('p')
-                            scraped_text = '\n'.join([p.get_text() for p in paragraphs])
-                            
-                            if scraped_text.strip():
-                                list_dokumen_mentah = [scraped_text]
-                                st.session_state.list_dokumen_mentah = list_dokumen_mentah
-                                st.session_state.list_dokumen_bersih = []
-                                st.success("✅ Scraping selesai")
-                                st.text_area("Preview:", scraped_text[:500] + "...", height=150)
-                            else:
-                                st.warning("⚠️ Tidak ada konten ditemukan")
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
+                    list_dokumen_mentah = []
+                    
+                    if scraping_mode == "Teks Paragraf":
+                        result = scrape_paragraph(url)
+                        if result:
+                            list_dokumen_mentah = result
+                    
+                    elif scraping_mode == "Data Tabel":
+                        result = scrape_table(url)
+                        if result:
+                            list_dokumen_mentah = result
+                            st.info("💡 **Teks untuk NLP:** Data dari semua tabel digabungkan menjadi satu dokumen.")
+
+                    # Update Session State
+                    st.session_state.list_dokumen_mentah = list_dokumen_mentah
+                    st.session_state.list_dokumen_bersih = []
+                    
+                else:
+                    st.warning("Masukkan URL terlebih dahulu.")
+        # --- END OF WEB SCRAPING MODIFICATION ---
 
         st.markdown("---")
         st.metric("📊 Dokumen Dimuat", len(st.session_state.list_dokumen_mentah))
 
-    # --- TABS ---
+    # --- TABS (TIDAK BERUBAH) ---
     tab1, tab2, tab3, tab4 = st.tabs([
         "1️⃣ Preprocessing", 
         "2️⃣ Representasi Teks", 
@@ -953,7 +1037,7 @@ def main_app():
                     if new_text.strip():
                         new_seq = st.session_state.tokenizer.texts_to_sequences([new_text])
                         new_padded = pad_sequences(new_seq, maxlen=st.session_state.max_len, 
-                                                   padding='post', truncating='post')
+                                                     padding='post', truncating='post')
                         
                         pred = st.session_state.trained_model.predict(new_padded, verbose=0)
                         label = "Positive" if pred[0] > 0.5 else "Negative"
